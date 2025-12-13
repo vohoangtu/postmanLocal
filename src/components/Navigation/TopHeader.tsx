@@ -3,12 +3,13 @@
  * Hiển thị icons và actions ngang
  */
 
-import { FileText, Folder, History, FileCode, Settings, Server, BookOpen } from "lucide-react";
+import { FileText, Folder, History, FileCode, Settings, Server, BookOpen, Users, Link2 } from "lucide-react";
 import Button from "../UI/Button";
+import NotificationCenter from "../Notifications/NotificationCenter";
 
 interface TopHeaderProps {
-  activeView: "collections" | "history" | "templates" | "environments" | "schema" | "mock" | "docs" | null;
-  onViewChange: (view: "collections" | "history" | "templates" | "environments" | "schema" | "mock" | "docs" | null) => void;
+  activeView: "collections" | "history" | "templates" | "environments" | "schema" | "mock" | "docs" | "workspaces" | "chains" | null;
+  onViewChange: (view: "collections" | "history" | "templates" | "environments" | "schema" | "mock" | "docs" | "workspaces" | "chains" | null) => void;
   onNewRequest: () => void;
 }
 
@@ -54,6 +55,18 @@ export default function TopHeader({
       label: "Mock Server",
       view: "mock" as const,
     },
+    {
+      id: "workspaces",
+      icon: Users,
+      label: "Workspaces",
+      view: "workspaces" as const,
+    },
+    {
+      id: "chains",
+      icon: Link2,
+      label: "Chains",
+      view: "chains" as const,
+    },
   ];
 
   return (
@@ -80,7 +93,7 @@ export default function TopHeader({
       <div className="h-6 w-px bg-gray-700 mx-2" />
 
       {/* Navigation Items */}
-      <div className="flex items-center space-x-1 flex-1 overflow-x-auto">
+      <div className="flex items-center space-x-1 flex-1 overflow-x-auto scrollbar-thin scrollbar-thumb-gray-700">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeView === item.view;
@@ -89,19 +102,28 @@ export default function TopHeader({
             <button
               key={item.id}
               onClick={() => item.view && onViewChange(item.view)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors whitespace-nowrap ${
+              className={`relative flex items-center gap-2 px-2 sm:px-3 py-2 rounded-lg transition-all duration-200 whitespace-nowrap group ${
                 isActive
-                  ? "bg-blue-600 text-white"
+                  ? "bg-blue-600 text-white shadow-lg shadow-blue-600/50"
                   : "text-gray-400 hover:text-white hover:bg-gray-800"
               }`}
               title={item.label}
+              aria-label={item.label}
             >
-              <Icon size={18} />
-              <span className="text-sm hidden md:inline">{item.label}</span>
+              <Icon size={18} className={isActive ? "scale-110" : "group-hover:scale-110 transition-transform"} />
+              <span className="text-sm hidden lg:inline font-medium">{item.label}</span>
+              {isActive && (
+                <span className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-white rounded-full" />
+              )}
             </button>
           );
         })}
       </div>
+
+      <div className="h-6 w-px bg-gray-700 mx-2" />
+
+      {/* Notification Center */}
+      <NotificationCenter />
     </div>
   );
 }

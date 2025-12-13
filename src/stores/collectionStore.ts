@@ -16,6 +16,9 @@ interface Collection {
   name: string;
   description?: string;
   requests: Request[];
+  is_shared?: boolean;
+  permission?: "read" | "write" | "admin";
+  workspace_id?: string;
 }
 
 interface CollectionStore {

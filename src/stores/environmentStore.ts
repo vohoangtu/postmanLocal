@@ -21,6 +21,7 @@ interface EnvironmentStore {
   updateEnvironment: (id: string, updates: Partial<Environment>) => void;
   deleteEnvironment: (id: string) => void;
   getVariable: (key: string) => string | null;
+  replaceVariables: (text: string) => string;
 }
 
 export const useEnvironmentStore = create<EnvironmentStore>((set, get) => ({
@@ -47,6 +48,20 @@ export const useEnvironmentStore = create<EnvironmentStore>((set, get) => ({
     if (!activeEnv) return null;
     const variable = activeEnv.variables.find((v) => v.key === key && v.enabled);
     return variable ? variable.value : null;
+  },
+  replaceVariables: (text) => {
+    const state = get();
+    const activeEnv = state.environments.find((e) => e.id === state.activeEnvironment);
+    if (!activeEnv || !text) return text;
+    
+    let result = text;
+    activeEnv.variables.forEach((variable) => {
+      if (variable.enabled) {
+        const regex = new RegExp(`\\{\\{${variable.key}\\}\\}`, "g");
+        result = result.replace(regex, variable.value);
+      }
+    });
+    return result;
   },
 }));
 

@@ -12,6 +12,30 @@ use axum::{
 use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_mock_response_structure() {
+        let response = MockResponse {
+            status: 200,
+            headers: HashMap::new(),
+            body: json!({"message": "success"}),
+            delay_ms: 0,
+        };
+
+        assert_eq!(response.status, 200);
+        assert_eq!(response.delay_ms, 0);
+    }
+
+    #[tokio::test]
+    async fn test_mock_server_creation() {
+        let server = MockServer::new(3000);
+        assert_eq!(server.get_port(), 3000);
+    }
+}
+
 pub struct MockServer {
     port: u16,
     routes: Arc<Mutex<HashMap<String, MockResponse>>>,

@@ -1,4 +1,5 @@
 import { AlertTriangle, RefreshCw, Home } from "lucide-react";
+import { getUserFriendlyError } from "../../services/errorLogger";
 
 interface ErrorDisplayProps {
   error: Error | null;
@@ -16,17 +17,18 @@ export default function ErrorDisplay({ error, errorInfo, onReset }: ErrorDisplay
           </div>
           <div className="flex-1">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-              Something went wrong
+              Đã xảy ra lỗi
             </h2>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
-              An unexpected error occurred. Please try again or contact support if the problem
-              persists.
+              {error
+                ? getUserFriendlyError(error)
+                : "Đã xảy ra lỗi không xác định. Vui lòng thử lại hoặc liên hệ hỗ trợ nếu vấn đề vẫn tiếp tục."}
             </p>
 
-            {error && (
+            {error && import.meta.env.DEV && (
               <div className="mb-4">
                 <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  Error Details:
+                  Chi tiết lỗi (Chỉ hiển thị trong development):
                 </h3>
                 <pre className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-3 text-xs text-red-800 dark:text-red-200 overflow-x-auto">
                   {error.message}
@@ -52,7 +54,7 @@ export default function ErrorDisplay({ error, errorInfo, onReset }: ErrorDisplay
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
                 >
                   <RefreshCw className="w-4 h-4" />
-                  Try Again
+                  Thử lại
                 </button>
               )}
               <button
@@ -60,7 +62,7 @@ export default function ErrorDisplay({ error, errorInfo, onReset }: ErrorDisplay
                 className="flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
               >
                 <Home className="w-4 h-4" />
-                Reload App
+                Tải lại ứng dụng
               </button>
             </div>
           </div>

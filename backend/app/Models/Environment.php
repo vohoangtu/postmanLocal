@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Crypt;
 
 class Environment extends Model
 {
@@ -18,6 +19,68 @@ class Environment extends Model
     protected $casts = [
         'variables' => 'array',
     ];
+
+    /**
+     * Encrypt variables trước khi lưu
+     */
+    public function setVariablesAttribute($value)
+    {
+        if (is_array($value)) {
+            // Encrypt từng variable value
+            $encrypted = [];
+            foreach ($value as $key => $var) {
+                if (isset($var['value'])) {
+                    $encrypted[$key] = [
+                        'key' => $var['key'] ?? $key,
+                        'value' => Crypt::encryptString($var['value']),
+                        'enabled' => $var['enabled'] ?? true,
+                    ];
+                } else {
+                    $encrypted[$key] = $var;
+                }
+            }
+            $this->attributes['variables'] = json_encode($encrypted);
+        } else {
+            $this->attributes['variables'] = $value;
+        }
+    }
+
+    /**
+     * Decrypt variables khi đọc
+     */
+    public function getVariablesAttribute($value)
+    {
+        if (empty($value)) {
+            return [];
+        }
+
+        $decoded = is_string($value) ? json_decode($value, true) : $value;
+        
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        // Decrypt từng variable value
+        $decrypted = [];
+        foreach ($decoded as $key => $var) {
+            if (isset($var['value'])) {
+                try {
+                    $decrypted[$key] = [
+                        'key' => $var['key'] ?? $key,
+                        'value' => Crypt::decryptString($var['value']),
+                        'enabled' => $var['enabled'] ?? true,
+                    ];
+                } catch (\Exception $e) {
+                    // Nếu không decrypt được, có thể là dữ liệu cũ chưa được encrypt
+                    $decrypted[$key] = $var;
+                }
+            } else {
+                $decrypted[$key] = $var;
+            }
+        }
+
+        return $decrypted;
+    }
 
     public function user()
     {

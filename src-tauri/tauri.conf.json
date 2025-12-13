@@ -4,7 +4,9 @@
   "identifier": "com.postmanlocal.app",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build"
+    "beforeBuildCommand": "npm run build",
+    "devPath": "http://localhost:1420",
+    "distDir": "../dist"
   },
   "app": {
     "windows": [
@@ -13,7 +15,9 @@
         "resizable": true,
         "title": "PostmanLocal",
         "width": 1200,
-        "height": 800
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600
       }
     ],
     "security": {
@@ -22,15 +26,51 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["msi", "dmg", "appimage", "deb", "rpm"],
     "icon": [
-      "icons/icon.ico"
-    ]
+      "icons/icon.ico",
+      "icons/icon.png",
+      "icons/icon.icns"
+    ],
+    "resources": [],
+    "externalBin": [],
+    "copyright": "",
+    "category": "DeveloperTool",
+    "shortDescription": "Desktop API testing tool",
+    "longDescription": "Postman-like desktop application for API testing and team collaboration",
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "",
+      "wix": {
+        "language": "en-US"
+      }
+    },
+    "macOS": {
+      "frameworks": [],
+      "minimumSystemVersion": "10.13",
+      "exceptionDomain": "",
+      "signingIdentity": null,
+      "entitlements": null
+    },
+    "linux": {
+      "deb": {
+        "depends": []
+      },
+      "rpm": {
+        "depends": []
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    }
   },
   "plugins": {
     "shell": {
       "open": true
     },
-    "fs": {}
+    "fs": {
+      "scope": ["$APPDATA/**", "$DOCUMENT/**", "$DOWNLOAD/**", "$HOME/**", "$RESOURCE/**", "$TEMP/**"]
+    }
   }
 }

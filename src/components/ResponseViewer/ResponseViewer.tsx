@@ -1,5 +1,7 @@
 import { useState, useMemo } from "react";
 import Editor from "@monaco-editor/react";
+import ComponentErrorBoundary from "../Error/ComponentErrorBoundary";
+import { formatResponse, detectContentType } from "../../services/formatters";
 
 interface ResponseViewerProps {
   response: any;
@@ -13,29 +15,29 @@ export default function ResponseViewer({ response, responseTime }: ResponseViewe
   const bodyContent = useMemo(() => {
     if (!response?.body) return "";
     
+    // Handle empty or null body
+    if (typeof response.body !== "string") {
+      return String(response.body || "");
+    }
+    
     if (format === "pretty") {
-      try {
-        const parsed = JSON.parse(response.body);
-        return JSON.stringify(parsed, null, 2);
-      } catch {
-        // Not JSON, try XML
-        if (response.body.trim().startsWith("<")) {
-          return response.body;
-        }
-        return response.body;
-      }
+      const contentType = detectContentType(response.body, response.headers);
+      return formatResponse(response.body, contentType);
     }
     return response.body;
-  }, [response?.body, format]);
+  }, [response?.body, response?.headers, format]);
 
   const language = useMemo(() => {
     if (!response?.body) return "plaintext";
     
+    const bodyStr = typeof response.body === "string" ? response.body : String(response.body || "");
+    if (!bodyStr.trim()) return "plaintext";
+    
     try {
-      JSON.parse(response.body);
+      JSON.parse(bodyStr);
       return "json";
     } catch {
-      if (response.body.trim().startsWith("<")) {
+      if (bodyStr.trim().startsWith("<")) {
         return "xml";
       }
       const contentType = response.headers?.["content-type"] || "";
@@ -48,10 +50,15 @@ export default function ResponseViewer({ response, responseTime }: ResponseViewe
 
   const responseSize = useMemo(() => {
     if (!response?.body) return "0 B";
-    const bytes = new Blob([response.body]).size;
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+    try {
+      const bodyStr = typeof response.body === "string" ? response.body : String(response.body || "");
+      const bytes = new Blob([bodyStr]).size;
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+    } catch {
+      return "0 B";
+    }
   }, [response?.body]);
 
   if (!response) {
@@ -99,7 +106,8 @@ export default function ResponseViewer({ response, responseTime }: ResponseViewe
   };
 
   return (
-    <div className="h-64 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 flex flex-col">
+    <ComponentErrorBoundary componentName="Response Viewer">
+      <div className="h-64 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 flex flex-col">
       <div className="p-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-4">
@@ -188,5 +196,6 @@ export default function ResponseViewer({ response, responseTime }: ResponseViewe
         )}
       </div>
     </div>
+    </ComponentErrorBoundary>
   );
 }

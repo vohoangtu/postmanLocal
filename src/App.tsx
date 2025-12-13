@@ -3,8 +3,10 @@ import ErrorBoundary from "./components/Error/ErrorBoundary";
 import ToastContainer from "./components/Toast/ToastContainer";
 import TopHeader from "./components/Navigation/TopHeader";
 import LeftPanel from "./components/Panels/LeftPanel";
+import PanelManager from "./components/Panels/PanelManager";
 import TabBar from "./components/Tabs/TabBar";
 import EmptyState from "./components/EmptyStates/EmptyState";
+import TabButton from "./components/UI/TabButton";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useTabStore } from "./stores/tabStore";
 import { usePanelStore } from "./stores/panelStore";
@@ -77,7 +79,8 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
+      <PanelManager>
+        <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
         <ToastContainer />
         <Suspense fallback={null}>
           <CommandPalette
@@ -98,23 +101,34 @@ function App() {
         <div className="flex-1 flex min-w-0 overflow-hidden relative">
           {/* Left Panel - hiển thị khi có view được chọn */}
           {isLeftPanelOpen && leftPanelView !== null && (
-            <div 
-              className={`hidden md:block transition-all duration-300 ease-in-out ${
-                isLeftPanelOpen 
-                  ? 'w-[40%] min-w-[320px] opacity-100' 
-                  : 'w-0 opacity-0'
-              }`}
-            >
-              <LeftPanel
-                view={leftPanelView}
-                isOpen={isLeftPanelOpen}
-                onClose={closeLeftPanel}
-                onNewRequest={handleNewRequest}
-              />
-            </div>
+            <>
+              <div 
+                className={`hidden md:block transition-all duration-300 ease-in-out ${
+                  isLeftPanelOpen 
+                    ? 'w-[40%] min-w-[320px] opacity-100' 
+                    : 'w-0 opacity-0'
+                }`}
+              >
+                <LeftPanel
+                  view={leftPanelView}
+                  isOpen={isLeftPanelOpen}
+                  onClose={closeLeftPanel}
+                  onNewRequest={handleNewRequest}
+                />
+              </div>
+              {/* Mobile panel - luôn render nhưng ẩn trên desktop */}
+              <div className="md:hidden">
+                <LeftPanel
+                  view={leftPanelView}
+                  isOpen={isLeftPanelOpen}
+                  onClose={closeLeftPanel}
+                  onNewRequest={handleNewRequest}
+                />
+              </div>
+            </>
           )}
 
-          {/* Divider giữa Left Panel và Main Content */}
+          {/* Divider giữa Left Panel và Main Content - chỉ hiển thị trên desktop */}
           {isLeftPanelOpen && leftPanelView !== null && (
             <div className="hidden md:block w-px bg-gray-200 dark:bg-gray-700" />
           )}
@@ -122,7 +136,7 @@ function App() {
           <div 
             className={`flex-1 flex flex-col min-w-0 overflow-hidden transition-all duration-300 ease-in-out ${
               isLeftPanelOpen && leftPanelView !== null 
-                ? 'w-[60%]' 
+                ? 'md:w-[60%] w-full' 
                 : 'w-full'
             }`}
           >
@@ -146,32 +160,20 @@ function App() {
                     </Suspense>
                     <div className="h-64 border-t border-gray-200 dark:border-gray-700 flex flex-col">
                       <div className="flex border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-                        <button
+                        <TabButton
+                          active={activeViewTab === "response"}
                           onClick={() => setActiveViewTab("response")}
-                          className={`flex-1 h-10 px-4 text-sm font-medium transition-colors relative flex items-center justify-center ${
-                            activeViewTab === "response"
-                              ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
-                              : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
-                          }`}
+                          className="flex-1"
                         >
-                          <span>Response</span>
-                          {activeViewTab === "response" && (
-                            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
-                          )}
-                        </button>
-                        <button
+                          Response
+                        </TabButton>
+                        <TabButton
+                          active={activeViewTab === "tests"}
                           onClick={() => setActiveViewTab("tests")}
-                          className={`flex-1 h-10 px-4 text-sm font-medium transition-colors relative flex items-center justify-center ${
-                            activeViewTab === "tests"
-                              ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
-                              : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
-                          }`}
+                          className="flex-1"
                         >
-                          <span>Tests</span>
-                          {activeViewTab === "tests" && (
-                            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
-                          )}
-                        </button>
+                          Tests
+                        </TabButton>
                       </div>
                       <div className="flex-1 overflow-auto">
                         <Suspense fallback={
@@ -220,6 +222,7 @@ function App() {
           </Suspense>
         )}
       </div>
+      </PanelManager>
     </ErrorBoundary>
   );
 }

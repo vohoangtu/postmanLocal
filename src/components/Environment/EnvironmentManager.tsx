@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { useEnvironmentStore } from "../../stores/environmentStore";
 import Button from "../UI/Button";
+import Input from "../UI/Input";
+import Select from "../UI/Select";
+import Modal from "../UI/Modal";
+import Card from "../UI/Card";
+import Badge from "../UI/Badge";
+import { Plus, Trash2, Settings, CheckCircle2, X } from "lucide-react";
 
 export default function EnvironmentManager() {
   const {
@@ -34,31 +40,36 @@ export default function EnvironmentManager() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-          Environments
-        </h3>
+        <div className="flex items-center gap-2">
+          <Settings size={18} className="text-gray-600 dark:text-gray-400" />
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Environments
+          </h3>
+        </div>
         <Button
-          variant="link"
+          variant="primary"
           size="sm"
           onClick={() => setShowCreateModal(true)}
+          className="flex items-center gap-1.5"
         >
-          + New
+          <Plus size={14} />
+          New Environment
         </Button>
       </div>
 
       <div className="flex gap-2">
-        <select
+        <Select
+          fullWidth
           value={activeEnvironment || ""}
           onChange={(e) => setActiveEnvironment(e.target.value || null)}
-          className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-        >
-          <option value="">No Environment</option>
-          {environments.map((env) => (
-            <option key={env.id} value={env.id}>
-              {env.name}
-            </option>
-          ))}
-        </select>
+          options={[
+            { value: "", label: "No Environment" },
+            ...environments.map((env) => ({
+              value: env.id,
+              label: env.name,
+            })),
+          ]}
+        />
         {activeEnvironment && (
           <Button
             variant="danger"
@@ -69,107 +80,152 @@ export default function EnvironmentManager() {
               }
             }}
             title="Xóa environment"
+            aria-label="Delete environment"
           >
-            ×
+            <Trash2 size={14} />
           </Button>
         )}
       </div>
 
       {currentEnv && (
-        <div className="space-y-2">
-          <h4 className="text-xs font-semibold text-gray-600 dark:text-gray-400">
-            Variables
-          </h4>
-          {currentEnv.variables.map((variable, index) => (
-            <div key={index} className="flex gap-2 items-center">
-              <input
-                type="checkbox"
-                checked={variable.enabled}
-                onChange={(e) => {
-                  const newVars = [...currentEnv.variables];
-                  newVars[index].enabled = e.target.checked;
-                  updateEnvironment(currentEnv.id, { variables: newVars });
-                }}
-                className="w-4 h-4"
-              />
-              <input
-                type="text"
-                value={variable.key}
-                onChange={(e) => {
-                  const newVars = [...currentEnv.variables];
-                  newVars[index].key = e.target.value;
-                  updateEnvironment(currentEnv.id, { variables: newVars });
-                }}
-                placeholder="Variable name"
-                className="flex-1 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-              <input
-                type="text"
-                value={variable.value}
-                onChange={(e) => {
-                  const newVars = [...currentEnv.variables];
-                  newVars[index].value = e.target.value;
-                  updateEnvironment(currentEnv.id, { variables: newVars });
-                }}
-                placeholder="Value"
-                className="flex-1 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-              <button
-                onClick={() => {
-                  const newVars = currentEnv.variables.filter((_, i) => i !== index);
-                  updateEnvironment(currentEnv.id, { variables: newVars });
-                }}
-                className="p-1 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
-                title="Xóa variable"
-              >
-                ×
-              </button>
-            </div>
-          ))}
-          <Button
-            variant="link"
-            size="sm"
-            onClick={() => {
-              const newVars = [...currentEnv.variables, { key: "", value: "", enabled: true }];
-              updateEnvironment(currentEnv.id, { variables: newVars });
-            }}
-          >
-            + Add Variable
-          </Button>
-        </div>
+        <Card
+          title="Environment Variables"
+          subtitle={`${currentEnv.variables.filter((v) => v.enabled).length} active variables`}
+        >
+          <div className="space-y-3">
+            {currentEnv.variables.length === 0 ? (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                <p className="text-sm">No variables yet</p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    const newVars = [{ key: "", value: "", enabled: true }];
+                    updateEnvironment(currentEnv.id, { variables: newVars });
+                  }}
+                  className="mt-2"
+                >
+                  <Plus size={14} className="mr-1" />
+                  Add First Variable
+                </Button>
+              </div>
+            ) : (
+              <>
+                {currentEnv.variables.map((variable, index) => (
+                  <div key={index} className="flex gap-2 items-center p-2 bg-gray-50 dark:bg-gray-900/30 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newVars = [...currentEnv.variables];
+                        newVars[index].enabled = !newVars[index].enabled;
+                        updateEnvironment(currentEnv.id, { variables: newVars });
+                      }}
+                      className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                        variable.enabled
+                          ? "bg-blue-600 border-blue-600 text-white"
+                          : "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                      }`}
+                      title={variable.enabled ? "Disable variable" : "Enable variable"}
+                      aria-label={variable.enabled ? "Disable variable" : "Enable variable"}
+                    >
+                      {variable.enabled && <CheckCircle2 size={12} />}
+                    </button>
+                    <Input
+                      value={variable.key}
+                      onChange={(e) => {
+                        const newVars = [...currentEnv.variables];
+                        newVars[index].key = e.target.value;
+                        updateEnvironment(currentEnv.id, { variables: newVars });
+                      }}
+                      placeholder="Variable name"
+                      className="flex-1"
+                    />
+                    <Input
+                      value={variable.value}
+                      onChange={(e) => {
+                        const newVars = [...currentEnv.variables];
+                        newVars[index].value = e.target.value;
+                        updateEnvironment(currentEnv.id, { variables: newVars });
+                      }}
+                      placeholder="Value"
+                      className="flex-1"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        const newVars = currentEnv.variables.filter((_, i) => i !== index);
+                        updateEnvironment(currentEnv.id, { variables: newVars });
+                      }}
+                      className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                      title="Xóa variable"
+                      aria-label="Delete variable"
+                    >
+                      <X size={14} />
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    const newVars = [...currentEnv.variables, { key: "", value: "", enabled: true }];
+                    updateEnvironment(currentEnv.id, { variables: newVars });
+                  }}
+                  className="w-full"
+                >
+                  <Plus size={14} className="mr-1" />
+                  Add Variable
+                </Button>
+              </>
+            )}
+          </div>
+        </Card>
       )}
 
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg w-96">
-            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-              Create New Environment
-            </h3>
-            <input
-              type="text"
-              value={newEnvName}
-              onChange={(e) => setNewEnvName(e.target.value)}
-              placeholder="Environment name"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded mb-4 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              onKeyPress={(e) => e.key === "Enter" && handleCreateEnvironment()}
-            />
-            <div className="flex gap-2 justify-end">
-              <Button
-                variant="secondary"
-                onClick={() => setShowCreateModal(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleCreateEnvironment}
-              >
-                Create
-              </Button>
-            </div>
-          </div>
+      <Modal
+        isOpen={showCreateModal}
+        onClose={() => {
+          setShowCreateModal(false);
+          setNewEnvName("");
+        }}
+        title="Create New Environment"
+        size="md"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setShowCreateModal(false);
+                setNewEnvName("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleCreateEnvironment}
+            >
+              Create
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Input
+            label="Environment Name"
+            value={newEnvName}
+            onChange={(e) => setNewEnvName(e.target.value)}
+            placeholder="e.g., Development, Staging, Production"
+            fullWidth
+            onKeyPress={(e) => e.key === "Enter" && handleCreateEnvironment()}
+            autoFocus
+          />
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Environment variables will be available for use in all requests within this environment.
+          </p>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }

@@ -188,3 +188,5 @@ function RequestHistory() {
   );
 }
 
+export default memo(RequestHistory);
+

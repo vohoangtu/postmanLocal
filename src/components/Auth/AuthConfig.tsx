@@ -1,4 +1,5 @@
 import { useState } from "react";
+import OAuth2ConfigComponent from "./OAuth2Config";
 
 type AuthType = "none" | "bearer" | "basic" | "apikey" | "oauth2";
 
@@ -167,9 +168,7 @@ export default function AuthConfig({ onAuthChange }: AuthConfigProps) {
       )}
 
       {authType === "oauth2" && (
-        <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded text-sm text-yellow-800 dark:text-yellow-200">
-          OAuth 2.0 support coming soon
-        </div>
+        <OAuth2ConfigComponent onAuthChange={onAuthChange} />
       )}
     </div>
   );

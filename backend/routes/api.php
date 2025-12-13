@@ -10,15 +10,28 @@ use App\Http\Controllers\SyncController;
 use App\Http\Controllers\WorkspaceController;
 
 Route::middleware('api')->group(function () {
-    // Auth routes
-    Route::post('/auth/register', [AuthController::class, 'register']);
-    Route::post('/auth/login', [AuthController::class, 'login']);
+    // Auth routes với rate limiting
+    Route::post('/auth/register', [AuthController::class, 'register'])
+        ->middleware('throttle:register');
+    Route::post('/auth/login', [AuthController::class, 'login'])
+        ->middleware('throttle:login');
     Route::post('/auth/refresh', [AuthController::class, 'refresh']);
+    Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])
+        ->middleware('throttle:password_reset');
+    Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])
+        ->middleware('throttle:password_reset');
     
     // Protected routes
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/auth/user', [AuthController::class, 'user']);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
+        Route::post('/auth/revoke-all-tokens', [AuthController::class, 'revokeAllTokens']);
+        
+        // 2FA routes
+        Route::post('/auth/2fa/enable', [AuthController::class, 'enable2FA']);
+        Route::post('/auth/2fa/verify', [AuthController::class, 'verify2FA']);
+        Route::post('/auth/2fa/disable', [AuthController::class, 'disable2FA']);
+        Route::post('/auth/2fa/recovery-codes', [AuthController::class, 'generateRecoveryCodes']);
         
         // Collections
         Route::apiResource('collections', CollectionController::class);

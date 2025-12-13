@@ -33,4 +33,14 @@ simplelog = "0.12"
 # DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]
 
+[profile.release]
+# Optimize for size
+opt-level = "z"
+# Link-time optimization
+lto = true
+# Better optimization
+codegen-units = 1
+# Strip symbols để giảm binary size
+strip = true
+
 

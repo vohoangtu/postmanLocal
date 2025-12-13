@@ -144,8 +144,22 @@ export default function SaveRequestModal({
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
                 <option value="">-- Không có folder --</option>
-                {/* TODO: Load folders từ collection */}
+                {/* Load unique folderIds từ requests trong collection */}
+                {Array.from(
+                  new Set(
+                    selectedCollection.requests
+                      .map((r) => r.folderId)
+                      .filter((id): id is string => !!id)
+                  )
+                ).map((folderId) => (
+                  <option key={folderId} value={folderId}>
+                    Folder {folderId}
+                  </option>
+                ))}
               </select>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Lưu ý: Folders sẽ được load từ collection data khi có folder management system
+              </p>
             </div>
           )}
         </div>

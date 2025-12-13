@@ -4,6 +4,8 @@ import { useToast } from "../../hooks/useToast";
 import { useCollectionStore } from "../../stores/collectionStore";
 import { useEnvironmentStore } from "../../stores/environmentStore";
 import { useSchemaStore } from "../../stores/schemaStore";
+import { isTauri } from "../../utils/platform";
+import { invoke } from "@tauri-apps/api/core";
 
 export default function SyncPanel() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -76,24 +78,50 @@ export default function SyncPanel() {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      await syncService.syncAll({
-        collections: collections.map((c) => ({
-          name: c.name,
-          description: c.description,
-          data: c.requests,
-        })),
-        environments: environments.map((e) => ({
-          name: e.name,
-          variables: e.variables,
-        })),
-        schemas: schemas.map((s) => ({
-          name: s.name,
-          schema_data: s.schemaData,
-        })),
-      });
-      toast.success("Sync completed successfully!");
+      const token = localStorage.getItem("auth_token");
+      if (!token) {
+        toast.error("Vui lòng đăng nhập trước khi đồng bộ");
+        return;
+      }
+
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+
+      if (isTauri()) {
+        // Sử dụng Tauri sync command để đồng bộ từ SQLite
+        const result = await invoke("sync_to_cloud", {
+          config: {
+            apiBaseUrl,
+            token,
+          },
+        }) as any;
+
+        if (result.success) {
+          toast.success(result.message || "Đồng bộ thành công!");
+        } else {
+          toast.error(result.message || "Đồng bộ thất bại");
+        }
+      } else {
+        // Fallback cho web: sử dụng syncService
+        await syncService.syncAll({
+          collections: collections.map((c) => ({
+            name: c.name,
+            description: c.description,
+            data: c.requests,
+          })),
+          environments: environments.map((e) => ({
+            name: e.name,
+            variables: e.variables,
+          })),
+          schemas: schemas.map((s) => ({
+            name: s.name,
+            schema_data: s.schemaData,
+          })),
+        });
+        toast.success("Đồng bộ thành công!");
+      }
     } catch (error: any) {
-      toast.error(error.response?.data?.message || "Sync failed");
+      const errorMessage = error.message || error.response?.data?.message || "Đồng bộ thất bại";
+      toast.error(errorMessage);
     } finally {
       setSyncing(false);
     }

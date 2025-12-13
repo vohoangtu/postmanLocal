@@ -23,5 +23,36 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Không expose sensitive information trong errors
+        $exceptions->render(function (\Throwable $e, $request) {
+            // Log detailed error
+            \Illuminate\Support\Facades\Log::error('Exception occurred', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            // Return generic error message cho users
+            if ($request->expectsJson()) {
+                $statusCode = method_exists($e, 'getStatusCode') ? $e->getStatusCode() : 500;
+                
+                // Get user-friendly message
+                $userMessage = 'Đã xảy ra lỗi. Vui lòng thử lại sau.';
+                if ($e instanceof \Illuminate\Validation\ValidationException) {
+                    $userMessage = 'Dữ liệu không hợp lệ. Vui lòng kiểm tra lại.';
+                } elseif ($e instanceof \Illuminate\Auth\AuthenticationException) {
+                    $userMessage = 'Bạn chưa đăng nhập hoặc phiên đăng nhập đã hết hạn.';
+                } elseif ($e instanceof \Illuminate\Auth\Access\AuthorizationException) {
+                    $userMessage = 'Bạn không có quyền thực hiện hành động này.';
+                } elseif ($e instanceof \Symfony\Component\HttpKernel\Exception\NotFoundHttpException) {
+                    $userMessage = 'Không tìm thấy tài nguyên.';
+                }
+                
+                return response()->json([
+                    'message' => $userMessage,
+                    'error' => config('app.debug') ? $e->getMessage() : 'Internal Server Error',
+                ], $statusCode);
+            }
+        });
     })->create();
