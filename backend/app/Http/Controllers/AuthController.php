@@ -12,9 +12,11 @@ class AuthController extends Controller
     public function register(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:8',
+            'name' => 'required|string|max:255|regex:/^[a-zA-Z0-9\s\-_]+$/', // Alphanumeric và spaces only
+            'email' => 'required|string|email|max:255|unique:users|regex:/^[^\s@]+@[^\s@]+\.[^\s@]+$/',
+            'password' => 'required|string|min:8|regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/', // At least one lowercase, uppercase, and number
+        ], [
+            'password.regex' => 'Password must contain at least one uppercase letter, one lowercase letter, and one number.',
         ]);
 
         $user = User::create([
@@ -23,11 +25,14 @@ class AuthController extends Controller
             'password' => Hash::make($request->password),
         ]);
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $token = $user->createToken('auth_token', ['*'], now()->addHours(1))->plainTextToken;
+        $refreshToken = $user->createToken('refresh_token', ['*'], now()->addDays(30))->plainTextToken;
 
         return response()->json([
             'user' => $user,
             'token' => $token,
+            'refresh_token' => $refreshToken,
+            'expires_at' => now()->addHours(1)->toIso8601String(),
         ], 201);
     }
 
@@ -46,11 +51,14 @@ class AuthController extends Controller
             ]);
         }
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $token = $user->createToken('auth_token', ['*'], now()->addHours(1))->plainTextToken;
+        $refreshToken = $user->createToken('refresh_token', ['*'], now()->addDays(30))->plainTextToken;
 
         return response()->json([
             'user' => $user,
             'token' => $token,
+            'refresh_token' => $refreshToken,
+            'expires_at' => now()->addHours(1)->toIso8601String(),
         ]);
     }
 
@@ -64,6 +72,40 @@ class AuthController extends Controller
         $request->user()->currentAccessToken()->delete();
 
         return response()->json(['message' => 'Logged out successfully']);
+    }
+
+    /**
+     * Refresh access token using refresh token
+     */
+    public function refresh(Request $request)
+    {
+        $request->validate([
+            'refresh_token' => 'required|string',
+        ]);
+
+        // Find token in database
+        $token = \Laravel\Sanctum\PersonalAccessToken::findToken($request->refresh_token);
+        
+        if (!$token) {
+            return response()->json(['message' => 'Invalid refresh token'], 401);
+        }
+
+        $user = $token->tokenable;
+
+        // Delete old token
+        $token->delete();
+
+        // Create new token
+        $newToken = $user->createToken('auth_token')->plainTextToken;
+        
+        // Create refresh token (longer expiry)
+        $refreshToken = $user->createToken('refresh_token', ['*'], now()->addDays(30))->plainTextToken;
+
+        return response()->json([
+            'token' => $newToken,
+            'refresh_token' => $refreshToken,
+            'expires_at' => now()->addHours(1)->toIso8601String(),
+        ]);
     }
 }
 

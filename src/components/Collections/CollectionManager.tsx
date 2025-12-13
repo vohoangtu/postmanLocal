@@ -1,13 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback, memo } from "react";
 import { useCollectionStore } from "../../stores/collectionStore";
 import { loadCollections } from "../../services/storageService";
 import { useToast } from "../../hooks/useToast";
 import EmptyState from "../EmptyStates/EmptyState";
 import FolderManager from "../Folders/FolderManager";
+import ShareCollectionModal from "./ShareCollectionModal";
+import CollectionPermissionBadge from "./CollectionPermissionBadge";
+import CommentsPanel from "../Comments/CommentsPanel";
+import VersionHistory from "./VersionHistory";
 import Button from "../UI/Button";
-import { Folder } from "lucide-react";
+import { Folder, Share2, MessageSquare, History, FileCode, Upload } from "lucide-react";
 
-export default function CollectionManager() {
+function CollectionManager() {
   const {
     collections,
     setCollections,
@@ -20,6 +24,14 @@ export default function CollectionManager() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [sharingCollectionId, setSharingCollectionId] = useState<string | null>(null);
+  const [showComments, setShowComments] = useState(false);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [showPublishTemplateModal, setShowPublishTemplateModal] = useState(false);
+  const [publishingCollectionId, setPublishingCollectionId] = useState<string | null>(null);
+  const [templateCategory, setTemplateCategory] = useState("");
+  const [templateTags, setTemplateTags] = useState("");
   const [newCollectionName, setNewCollectionName] = useState("");
   const [newCollectionDescription, setNewCollectionDescription] = useState("");
   const [editingCollection, setEditingCollection] = useState<string | null>(null);
@@ -28,7 +40,7 @@ export default function CollectionManager() {
     loadCollectionsData();
   }, []);
 
-  const loadCollectionsData = async () => {
+  const loadCollectionsData = useCallback(async () => {
     try {
       const data = await loadCollections();
       setCollections(data.map((c: any) => ({
@@ -46,7 +58,7 @@ export default function CollectionManager() {
       console.error("Failed to load collections:", error);
       setCollections([]);
     }
-  };
+  }, [setCollections]);
 
   const handleCreateCollection = async () => {
     if (!newCollectionName.trim()) return;
@@ -104,6 +116,58 @@ export default function CollectionManager() {
     setShowDeleteConfirm(true);
   };
 
+  const handlePublishAsTemplate = (collectionId: string) => {
+    setPublishingCollectionId(collectionId);
+    setTemplateCategory("");
+    setTemplateTags("");
+    setShowPublishTemplateModal(true);
+  };
+
+  const handlePublishTemplate = async () => {
+    if (!publishingCollectionId) return;
+
+    try {
+      const token = localStorage.getItem("auth_token");
+      if (!token) {
+        toast.error("Vui lòng đăng nhập để publish template");
+        return;
+      }
+
+      const tags = templateTags
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+
+      const response = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"}/collections/${publishingCollectionId}/publish-template`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            category: templateCategory || null,
+            tags: tags.length > 0 ? tags : null,
+          }),
+        }
+      );
+
+      if (response.ok) {
+        toast.success("Collection đã được publish thành template");
+        setShowPublishTemplateModal(false);
+        setPublishingCollectionId(null);
+        setTemplateCategory("");
+        setTemplateTags("");
+      } else {
+        const error = await response.json();
+        toast.error(error.message || "Failed to publish template");
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to publish template");
+    }
+  };
+
   return (
     <div className="space-y-2">
       <Button
@@ -140,16 +204,63 @@ export default function CollectionManager() {
                 : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
             }`}
           >
-            <div
-              className="cursor-pointer"
-              onClick={() => setSelectedCollection(collection.id)}
-            >
-              {collection.name}
+            <div className="flex items-center justify-between">
+              <div
+                className="cursor-pointer flex-1"
+                onClick={() => setSelectedCollection(collection.id)}
+              >
+                <div className="flex items-center gap-2">
+                  <span>{collection.name}</span>
+                  <CollectionPermissionBadge
+                    isShared={collection.is_shared || false}
+                    permission={collection.permission}
+                  />
+                </div>
+              </div>
             </div>
             {selectedCollection === collection.id && (
               <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
                 <FolderManager />
-                <div className="flex gap-2 mt-2">
+                <div className="flex gap-2 mt-2 flex-wrap">
+                  <Button
+                    variant="link"
+                    size="sm"
+                    onClick={() => setShowComments(!showComments)}
+                    className="flex items-center gap-1"
+                  >
+                    <MessageSquare size={14} />
+                    Comments
+                  </Button>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    onClick={() => setShowVersionHistory(!showVersionHistory)}
+                    className="flex items-center gap-1"
+                  >
+                    <History size={14} />
+                    Versions
+                  </Button>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    onClick={() => handlePublishAsTemplate(collection.id)}
+                    className="flex items-center gap-1"
+                  >
+                    <FileCode size={14} />
+                    Publish Template
+                  </Button>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    onClick={() => {
+                      setSharingCollectionId(collection.id);
+                      setShowShareModal(true);
+                    }}
+                    className="flex items-center gap-1"
+                  >
+                    <Share2 size={14} />
+                    Share
+                  </Button>
                   <Button
                     variant="link"
                     size="sm"
@@ -166,6 +277,19 @@ export default function CollectionManager() {
                     Delete
                   </Button>
                 </div>
+                {showComments && (
+                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <CommentsPanel collectionId={collection.id} />
+                  </div>
+                )}
+                {showVersionHistory && (
+                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <VersionHistory
+                      collectionId={collection.id}
+                      onClose={() => setShowVersionHistory(false)}
+                    />
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -272,8 +396,79 @@ export default function CollectionManager() {
           </div>
         </div>
       )}
+
+      {showShareModal && sharingCollectionId && (
+        <ShareCollectionModal
+          isOpen={showShareModal}
+          onClose={() => {
+            setShowShareModal(false);
+            setSharingCollectionId(null);
+          }}
+          collectionId={sharingCollectionId}
+          collectionName={collections.find((c) => c.id === sharingCollectionId)?.name || ""}
+          onShareSuccess={() => {
+            loadCollectionsData();
+          }}
+        />
+      )}
+
+      {showPublishTemplateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg w-96">
+            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+              Publish as Template
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Category (optional)
+                </label>
+                <input
+                  type="text"
+                  value={templateCategory}
+                  onChange={(e) => setTemplateCategory(e.target.value)}
+                  placeholder="e.g., REST API, GraphQL, Authentication"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Tags (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  value={templateTags}
+                  onChange={(e) => setTemplateTags(e.target.value)}
+                  placeholder="e.g., api, rest, crud"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Separate tags with commas
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end mt-6">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setShowPublishTemplateModal(false);
+                  setPublishingCollectionId(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={handlePublishTemplate}>
+                <Upload size={14} className="mr-1" />
+                Publish
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+export default memo(CollectionManager);
 
 
