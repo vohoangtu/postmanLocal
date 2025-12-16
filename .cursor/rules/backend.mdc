@@ -1,0 +1,10 @@
+---
+alwaysApply: true
+---
+
+Laravel 12
+PHP 8.4
+PostgreSQL
+
+Sử dụng theo best practices và tiêu chuẩn phù hợp với phiên bản đề ra, ưu tiên hạn chế các lỗi bảo mật và các lỗi tiềm ẩn có thể xảy ra.
+Performance ở mức cầng cao càng tốt nhưng tôi quan tâm đến tính liên tục của chương trình, chạy trơn tru và ít lỗi.

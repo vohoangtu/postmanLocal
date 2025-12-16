@@ -21,7 +21,7 @@ export default function TeamMembersPanel({ workspaceId }: TeamMembersPanelProps)
 
   const loadTeamMembers = async () => {
     try {
-      const token = localStorage.getItem("auth_token");
+      const token = await authService.getAccessToken();
       if (!token) return;
 
       const response = await fetch(
@@ -49,7 +49,7 @@ export default function TeamMembersPanel({ workspaceId }: TeamMembersPanelProps)
 
     setLoading(true);
     try {
-      const token = localStorage.getItem("auth_token");
+      const token = await authService.getAccessToken();
       if (!token) return;
 
       const response = await fetch(
@@ -145,5 +145,7 @@ export default function TeamMembersPanel({ workspaceId }: TeamMembersPanelProps)
     </div>
   );
 }
+
+
 
 

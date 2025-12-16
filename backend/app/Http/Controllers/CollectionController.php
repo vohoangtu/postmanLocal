@@ -21,6 +21,11 @@ class CollectionController extends BaseController
                 ->with(['user', 'workspace'])
                 ->orderBy('updated_at', 'desc');
             
+            // Filter theo workspace_id nếu có
+            if ($request->has('workspace_id') && $request->workspace_id) {
+                $query->where('workspace_id', $request->workspace_id);
+            }
+            
             // Pagination
             if ($request->has('page') || $request->has('per_page')) {
                 return $this->paginate($query, $request);
@@ -37,15 +42,39 @@ class CollectionController extends BaseController
         $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'data' => 'nullable|json',
+            'data' => 'nullable|array', // Chấp nhận array/object, Laravel sẽ tự động convert thành JSON
+            'workspace_id' => 'nullable|exists:workspaces,id',
         ]);
+
+        // Kiểm tra workspace_id nếu có - user phải là owner hoặc member
+        if ($request->workspace_id) {
+            $workspace = \App\Models\Workspace::where('id', $request->workspace_id)
+                ->where(function ($query) {
+                    $query->where('owner_id', Auth::id())
+                        ->orWhereHas('teamMembers', function ($q) {
+                            $q->where('user_id', Auth::id());
+                        });
+                })
+                ->first();
+            
+            if (!$workspace) {
+                return response()->json(['message' => 'Workspace not found or access denied'], 403);
+            }
+        }
 
         $collection = Collection::create([
             'user_id' => Auth::id(),
             'name' => $request->name,
             'description' => $request->description,
-            'data' => $request->data,
+            'data' => $request->data, // Laravel sẽ tự động cast thành JSON nhờ $casts trong Model
+            'workspace_id' => $request->workspace_id,
         ]);
+
+        // Tự động set làm default nếu user chưa có default collection
+        $defaultCollection = Collection::getDefaultCollection(Auth::id());
+        if (!$defaultCollection) {
+            $collection->setAsDefault();
+        }
 
         // Invalidate cache
         Cache::forget($this->getUserCacheKey('collections', Auth::id()));
@@ -333,6 +362,41 @@ class CollectionController extends BaseController
         ]);
 
         return response()->json(['message' => 'Collection restored to version ' . $version->version_number]);
+    }
+
+    /**
+     * Lấy default collection của user hiện tại
+     */
+    public function getDefault()
+    {
+        $defaultCollection = Collection::getDefaultCollection(Auth::id());
+        
+        if (!$defaultCollection) {
+            return response()->json([
+                'message' => 'Default collection not found',
+            ], 404);
+        }
+
+        return response()->json($defaultCollection->load(['user', 'workspace']));
+    }
+
+    /**
+     * Set collection làm default
+     */
+    public function setDefault($id)
+    {
+        $collection = Collection::where('user_id', Auth::id())
+            ->findOrFail($id);
+
+        $collection->setAsDefault();
+
+        // Invalidate cache
+        Cache::forget($this->getUserCacheKey('collections', Auth::id()));
+
+        return response()->json([
+            'message' => 'Collection set as default successfully',
+            'collection' => $collection->load(['user', 'workspace']),
+        ]);
     }
 }
 

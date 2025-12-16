@@ -4,6 +4,8 @@
  */
 
 import { isTauri } from '../utils/platform';
+import { authService } from './authService';
+import { addRequestToCollection as addRequestToCollectionBackend } from './collectionService';
 
 export interface RequestData {
   name: string;
@@ -23,12 +25,17 @@ export interface SavedRequest extends RequestData {
 
 /**
  * Lưu request vào storage
+ * collectionId là bắt buộc - request phải thuộc một collection
  */
 export async function saveRequest(
   request: RequestData,
-  collectionId?: string,
+  collectionId: string,
   folderId?: string
 ): Promise<SavedRequest> {
+  // Validation: collectionId là bắt buộc
+  if (!collectionId) {
+    throw new Error('Collection ID là bắt buộc. Request phải thuộc một collection.');
+  }
   if (isTauri()) {
     // Sử dụng Tauri invoke cho desktop
     const { invoke } = await import('@tauri-apps/api/core');
@@ -43,17 +50,40 @@ export async function saveRequest(
       headers: headersJson,
       body: request.body || null,
       queryParams: queryParamsJson,
-      collectionId: collectionId ? parseInt(collectionId) : null,
+      collectionId: parseInt(collectionId),
       folderId: folderId ? parseInt(folderId) : null,
     });
 
-    return {
+    const savedRequest: SavedRequest = {
       ...request,
       id: requestId.toString(),
       collectionId,
       folderId,
       createdAt: new Date().toISOString(),
     };
+
+    // Sync với backend nếu đã đăng nhập
+    try {
+      const isAuthenticated = await authService.isAuthenticated();
+      if (isAuthenticated) {
+        // Sync request với backend
+        await addRequestToCollectionBackend(collectionId, {
+          id: savedRequest.id,
+          name: savedRequest.name,
+          method: savedRequest.method,
+          url: savedRequest.url,
+          headers: savedRequest.headers || {},
+          body: savedRequest.body,
+          queryParams: savedRequest.queryParams,
+          folderId: savedRequest.folderId,
+        });
+      }
+    } catch (error) {
+      // Log error nhưng không throw - request đã được lưu local
+      console.error('Failed to sync request to backend:', error);
+    }
+
+    return savedRequest;
   } else {
     // Sử dụng localStorage cho web
     const savedRequests = getSavedRequests();
@@ -67,6 +97,27 @@ export async function saveRequest(
     
     savedRequests.push(newRequest);
     localStorage.setItem('postmanlocal_requests', JSON.stringify(savedRequests));
+    
+    // Sync với backend nếu đã đăng nhập
+    try {
+      const isAuthenticated = await authService.isAuthenticated();
+      if (isAuthenticated) {
+        // Sync request với backend
+        await addRequestToCollectionBackend(collectionId, {
+          id: newRequest.id,
+          name: newRequest.name,
+          method: newRequest.method,
+          url: newRequest.url,
+          headers: newRequest.headers || {},
+          body: newRequest.body,
+          queryParams: newRequest.queryParams,
+          folderId: newRequest.folderId,
+        });
+      }
+    } catch (error) {
+      // Log error nhưng không throw - request đã được lưu local
+      console.error('Failed to sync request to backend:', error);
+    }
     
     return newRequest;
   }

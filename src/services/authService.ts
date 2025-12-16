@@ -204,6 +204,10 @@ class AuthService {
    */
   async saveUser(user: User): Promise<void> {
     await secureStorage.setItem(USER_KEY, JSON.stringify(user));
+    
+    // Update role service
+    const { roleService } = await import('./roleService');
+    roleService.setUser(user);
   }
 
   /**

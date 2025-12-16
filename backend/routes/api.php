@@ -12,8 +12,12 @@ use App\Http\Controllers\WorkspaceController;
 Route::middleware('api')->group(function () {
     // Auth routes với rate limiting
     Route::post('/auth/register', [AuthController::class, 'register'])
-        ->middleware('throttle:register');
+        ->middleware('throttle:register')
+        ->name('register');
     Route::post('/auth/login', [AuthController::class, 'login'])
+        ->middleware('throttle:login')
+        ->name('login');
+    Route::post('/auth/login-with-token-file', [AuthController::class, 'loginWithTokenFile'])
         ->middleware('throttle:login');
     Route::post('/auth/refresh', [AuthController::class, 'refresh']);
     Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])
@@ -36,6 +40,8 @@ Route::middleware('api')->group(function () {
         // Collections
         Route::apiResource('collections', CollectionController::class);
         Route::post('/collections/sync', [CollectionController::class, 'sync']);
+        Route::get('/collections/default', [CollectionController::class, 'getDefault']);
+        Route::post('/collections/{id}/set-default', [CollectionController::class, 'setDefault']);
         
         // Environments
         Route::apiResource('environments', EnvironmentController::class);
@@ -91,6 +97,21 @@ Route::middleware('api')->group(function () {
         Route::get('/notifications/unread', [\App\Http\Controllers\NotificationController::class, 'unread']);
         Route::put('/notifications/{id}/read', [\App\Http\Controllers\NotificationController::class, 'markAsRead']);
         Route::put('/notifications/read-all', [\App\Http\Controllers\NotificationController::class, 'markAllAsRead']);
+        
+        // User Panel routes
+        Route::prefix('user')->group(function () {
+            Route::get('profile', [\App\Http\Controllers\User\ProfileController::class, 'show']);
+            Route::put('profile', [\App\Http\Controllers\User\ProfileController::class, 'update']);
+            Route::put('password', [\App\Http\Controllers\User\ProfileController::class, 'updatePassword']);
+            Route::get('preferences', [\App\Http\Controllers\User\ProfileController::class, 'getPreferences']);
+            Route::put('preferences', [\App\Http\Controllers\User\ProfileController::class, 'updatePreferences']);
+            
+            // Onboarding routes
+            Route::get('onboarding', [\App\Http\Controllers\User\OnboardingController::class, 'index']);
+            Route::post('onboarding/complete-step', [\App\Http\Controllers\User\OnboardingController::class, 'completeStep']);
+            Route::post('onboarding/complete', [\App\Http\Controllers\User\OnboardingController::class, 'complete']);
+            Route::post('onboarding/reset', [\App\Http\Controllers\User\OnboardingController::class, 'reset']);
+        });
     });
 });
 

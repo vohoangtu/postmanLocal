@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { syncService } from "../../services/syncService";
+import { authService } from "../../services/authService";
 import { useToast } from "../../hooks/useToast";
 import Button from "../UI/Button";
 import Input from "../UI/Input";
@@ -37,7 +38,7 @@ export default function WorkspaceManager() {
 
   const loadWorkspaces = async () => {
     try {
-      const token = localStorage.getItem("auth_token");
+      const token = await authService.getAccessToken();
       if (!token) return;
 
       const response = await fetch(
@@ -71,7 +72,7 @@ export default function WorkspaceManager() {
 
     setLoading(true);
     try {
-      const token = localStorage.getItem("auth_token");
+      const token = await authService.getAccessToken();
       if (!token) {
         toast.error("Vui lòng đăng nhập để tạo workspace");
         return;
@@ -117,7 +118,7 @@ export default function WorkspaceManager() {
     if (!confirm("Bạn có chắc muốn xóa workspace này?")) return;
 
     try {
-      const token = localStorage.getItem("auth_token");
+      const token = await authService.getAccessToken();
       if (!token) return;
 
       const response = await fetch(

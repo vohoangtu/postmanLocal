@@ -20,6 +20,7 @@ interface TabStore {
   setActiveTab: (id: string | null) => void;
   addTab: (tab: Omit<Tab, "id">) => string;
   closeTab: (id: string) => void;
+  closeAllTabs: () => void; // Đóng tất cả tabs nhưng giữ lại tab đang active
   updateTab: (id: string, updates: Partial<Tab>) => void;
   getTab: (id: string) => Tab | undefined;
 }
@@ -49,6 +50,20 @@ export const useTabStore = create<TabStore>((set, get) => ({
       return {
         tabs: newTabs,
         activeTabId: newActiveId,
+      };
+    });
+  },
+  closeAllTabs: () => {
+    set((state) => {
+      // Nếu không có active tab, đóng tất cả
+      if (!state.activeTabId) {
+        return { tabs: [], activeTabId: null };
+      }
+      // Giữ lại tab đang active
+      const activeTab = state.tabs.find((t) => t.id === state.activeTabId);
+      return {
+        tabs: activeTab ? [activeTab] : [],
+        activeTabId: state.activeTabId,
       };
     });
   },

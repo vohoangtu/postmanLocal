@@ -1,24 +1,110 @@
 import { useTabStore } from "../../stores/tabStore";
-import { X } from "lucide-react";
+import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import Tooltip from "../UI/Tooltip";
+import { useState, useRef, useEffect } from "react";
 
 export default function TabBar() {
-  const { tabs, activeTabId, setActiveTab, closeTab } = useTabStore();
+  const { tabs, activeTabId, setActiveTab, closeTab, closeAllTabs } = useTabStore();
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  // Kiểm tra khả năng scroll
+  const checkScrollability = () => {
+    if (!scrollContainerRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
+    setCanScrollLeft(scrollLeft > 0);
+    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 1);
+  };
+
+  // Auto-scroll to active tab khi tab được activate
+  useEffect(() => {
+    if (!scrollContainerRef.current || !activeTabId) return;
+
+    const activeTabElement = scrollContainerRef.current.querySelector(
+      `[data-tab-id="${activeTabId}"]`
+    ) as HTMLElement;
+
+    if (activeTabElement) {
+      activeTabElement.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "center",
+      });
+    }
+  }, [activeTabId]);
+
+  // Check scrollability khi tabs thay đổi hoặc window resize
+  useEffect(() => {
+    checkScrollability();
+    const handleResize = () => checkScrollability();
+    window.addEventListener("resize", handleResize);
+    const scrollContainer = scrollContainerRef.current;
+    if (scrollContainer) {
+      scrollContainer.addEventListener("scroll", checkScrollability);
+    }
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      if (scrollContainer) {
+        scrollContainer.removeEventListener("scroll", checkScrollability);
+      }
+    };
+  }, [tabs]);
+
+  const scrollLeft = () => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollBy({
+        left: -200,
+        behavior: "smooth",
+      });
+    }
+  };
+
+  const scrollRight = () => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollBy({
+        left: 200,
+        behavior: "smooth",
+      });
+    }
+  };
 
   if (tabs.length === 0) return null;
 
   return (
-    <div className="flex items-center bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600">
-      {tabs.map((tab) => (
-        <div
-          key={tab.id}
-          className={`group flex items-center gap-2 px-3 py-2 border-r border-gray-200 dark:border-gray-700 cursor-pointer min-w-[180px] max-w-[250px] transition-colors ${
-            activeTabId === tab.id
-              ? "bg-white dark:bg-gray-900 border-b-2 border-blue-600"
-              : "bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700"
-          }`}
-          onClick={() => setActiveTab(tab.id)}
+    <div className="relative flex items-center bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+      {/* Scroll Left Button */}
+      {canScrollLeft && (
+        <button
+          onClick={scrollLeft}
+          className="absolute left-0 z-10 h-full px-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center"
+          aria-label="Scroll left"
         >
+          <ChevronLeft size={16} className="text-gray-600 dark:text-gray-400" />
+        </button>
+      )}
+
+      {/* Tabs Container */}
+      <div
+        ref={scrollContainerRef}
+        className="flex items-center flex-1 overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scroll-smooth"
+        style={{
+          scrollbarWidth: "thin",
+          paddingLeft: canScrollLeft ? "32px" : "0",
+          paddingRight: canScrollRight ? "32px" : "0",
+        }}
+      >
+        {tabs.map((tab) => (
+          <div
+            key={tab.id}
+            data-tab-id={tab.id}
+            className={`group flex items-center gap-2 px-3 py-2 border-r border-gray-200 dark:border-gray-700 cursor-pointer min-w-[180px] max-w-[250px] transition-colors flex-shrink-0 ${
+              activeTabId === tab.id
+                ? "bg-white dark:bg-gray-900 border-b-2 border-blue-600 shadow-sm"
+                : "bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700"
+            }`}
+            onClick={() => setActiveTab(tab.id)}
+          >
           <span
             className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
               tab.method === "GET"
@@ -55,8 +141,36 @@ export default function TabBar() {
               <X size={14} className="text-gray-500 dark:text-gray-400" />
             </button>
           </Tooltip>
+          </div>
+        ))}
+      </div>
+
+      {/* Scroll Right Button */}
+      {canScrollRight && (
+        <button
+          onClick={scrollRight}
+          className="absolute right-0 z-10 h-full px-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center"
+          aria-label="Scroll right"
+        >
+          <ChevronRight size={16} className="text-gray-600 dark:text-gray-400" />
+        </button>
+      )}
+
+      {/* Close All Button */}
+      {tabs.length > 1 && (
+        <div className="flex items-center border-l border-gray-200 dark:border-gray-700 px-2">
+          <Tooltip content="Đóng tất cả tabs (giữ lại tab đang active)">
+            <button
+              onClick={closeAllTabs}
+              className="px-2 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors flex items-center gap-1"
+              aria-label="Close all tabs"
+            >
+              <X size={14} />
+              <span className="hidden sm:inline">Close All</span>
+            </button>
+          </Tooltip>
         </div>
-      ))}
+      )}
     </div>
   );
 }

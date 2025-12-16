@@ -3,8 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Collection;
 use App\Models\PasswordReset;
 use App\Services\SecurityLogger;
+use App\Services\TokenFileService;
+use App\Services\DeviceFingerprintService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
@@ -14,10 +17,17 @@ use PragmaRX\Google2FA\Google2FA;
 class AuthController extends Controller
 {
     protected SecurityLogger $securityLogger;
+    protected TokenFileService $tokenFileService;
+    protected DeviceFingerprintService $deviceFingerprintService;
 
-    public function __construct(SecurityLogger $securityLogger)
-    {
+    public function __construct(
+        SecurityLogger $securityLogger,
+        TokenFileService $tokenFileService,
+        DeviceFingerprintService $deviceFingerprintService
+    ) {
         $this->securityLogger = $securityLogger;
+        $this->tokenFileService = $tokenFileService;
+        $this->deviceFingerprintService = $deviceFingerprintService;
     }
     public function register(Request $request)
     {
@@ -33,6 +43,15 @@ class AuthController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
+        ]);
+
+        // Tạo default collection cho user mới
+        $defaultCollection = Collection::create([
+            'user_id' => $user->id,
+            'name' => 'My Requests',
+            'description' => 'Default collection for your requests',
+            'is_default' => true,
+            'data' => ['requests' => []],
         ]);
 
         $token = $user->createToken('auth_token', ['*'], now()->addHours(1))->plainTextToken;
@@ -120,6 +139,7 @@ class AuthController extends Controller
             'token' => $token,
             'refresh_token' => $refreshToken,
             'expires_at' => now()->addHours(1)->toIso8601String(),
+            'preferences' => $user->preferences ?? [],
         ]);
     }
 
@@ -393,6 +413,102 @@ class AuthController extends Controller
         return response()->json([
             'recovery_codes' => $recoveryCodes,
         ]);
+    }
+
+    /**
+     * Login với token file
+     */
+    public function loginWithTokenFile(Request $request)
+    {
+        $request->validate([
+            'token_file' => 'required|file|mimes:json|max:10240', // Max 10MB
+            'device_fingerprint' => 'nullable|string',
+        ]);
+
+        try {
+            // Đọc file content
+            $fileContent = file_get_contents($request->file('token_file')->getRealPath());
+            
+            // Decrypt token file
+            $tokenData = $this->tokenFileService->decryptTokenFile($fileContent);
+            
+            // Verify token
+            $userToken = $this->tokenFileService->verifyToken($tokenData);
+            
+            if (!$userToken) {
+                $this->securityLogger->logLoginFailure($tokenData['user_email'] ?? 'unknown', $request, 'invalid_token_file');
+                throw ValidationException::withMessages([
+                    'token_file' => ['Token file không hợp lệ hoặc đã hết hạn.'],
+                ]);
+            }
+
+            // Get user
+            $user = $userToken->user;
+            
+            if (!$user) {
+                throw ValidationException::withMessages([
+                    'token_file' => ['User không tồn tại.'],
+                ]);
+            }
+
+            // Kiểm tra account lockout
+            if ($user->isLocked()) {
+                $this->securityLogger->logLoginFailure($user->email, $request, 'account_locked');
+                throw ValidationException::withMessages([
+                    'token_file' => ['Tài khoản đã bị khóa. Vui lòng liên hệ admin.'],
+                ]);
+            }
+
+            // Get device fingerprint từ request hoặc generate
+            $deviceFingerprint = $request->input('device_fingerprint');
+            if (!$deviceFingerprint) {
+                $deviceFingerprint = $this->deviceFingerprintService->generate($request);
+            } else {
+                $deviceFingerprint = $this->deviceFingerprintService->generateFromClient($deviceFingerprint);
+            }
+
+            // Get device info
+            $deviceInfo = $this->deviceFingerprintService->getDeviceInfo($request);
+
+            // Check device binding
+            if ($userToken->isBoundToDevice()) {
+                // Token đã bind, verify device fingerprint
+                if (!$this->deviceFingerprintService->verifyClient($userToken->device_fingerprint, $request->input('device_fingerprint', ''))) {
+                    $this->securityLogger->logLoginFailure($user->email, $request, 'device_mismatch');
+                    throw ValidationException::withMessages([
+                        'token_file' => ['Token file đã được bind với device khác. Chỉ có thể sử dụng trên device đã đăng nhập lần đầu.'],
+                    ]);
+                }
+            } else {
+                // Token chưa bind, bind với device hiện tại
+                $userToken->bindToDevice($deviceFingerprint, $deviceInfo);
+            }
+
+            // Update last used
+            $userToken->update(['last_used_at' => now()]);
+
+            // Generate Sanctum token
+            $token = $user->createToken('auth_token', ['*'], now()->addHours(1))->plainTextToken;
+            $refreshToken = $user->createToken('refresh_token', ['*'], now()->addDays(30))->plainTextToken;
+
+            // Log success
+            $this->securityLogger->logLoginSuccess($user->id, $request);
+
+            return response()->json([
+                'user' => $user,
+                'token' => $token,
+                'refresh_token' => $refreshToken,
+                'expires_at' => now()->addHours(1)->toIso8601String(),
+                'preferences' => $user->preferences ?? [],
+            ]);
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            $this->securityLogger->logLoginFailure('unknown', $request, 'token_file_error');
+            throw ValidationException::withMessages([
+                'token_file' => ['Không thể xử lý token file: ' . $e->getMessage()],
+            ]);
+        }
     }
 }
 

@@ -49,11 +49,36 @@ export interface PostmanVariable {
 }
 
 /**
+ * Decode HTML entities trong string
+ * Xử lý các entities phổ biến như &quot;, &amp;, &lt;, &gt;, etc.
+ */
+function decodeHtmlEntities(text: string): string {
+  if (!text) return text;
+  
+  // Sử dụng DOM API nếu có (browser environment)
+  if (typeof document !== 'undefined') {
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = text;
+    return textarea.value;
+  }
+  
+  // Fallback: manual decode cho các entities phổ biến
+  return text
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/g, "'")
+    .replace(/&#x2F;/g, '/');
+}
+
+/**
  * Import Postman Collection
  */
 export function importPostmanCollection(
   postmanData: PostmanCollection
-): { collection: Collection; requests: Request[] } {
+): { collection: Collection; requests: Request[]; variables?: PostmanVariable[] } {
   const requests: Request[] = [];
 
   // Recursive function để parse items (bao gồm folders)
@@ -61,42 +86,52 @@ export function importPostmanCollection(
     for (const item of items) {
       if (item.request) {
         // Đây là một request
-        const url = typeof item.request.url === "string"
+        let url = typeof item.request.url === "string"
           ? item.request.url
           : item.request.url.raw || item.request.url.host?.join(".") + "/" + item.request.url.path?.join("/") || "";
+
+        // Decode HTML entities trong URL nếu có
+        if (url) {
+          url = decodeHtmlEntities(url);
+        }
 
         const headers: Record<string, string> = {};
         if (item.request.header) {
           for (const header of item.request.header) {
-            headers[header.key] = header.value;
+            // Decode HTML entities trong header values
+            headers[header.key] = decodeHtmlEntities(header.value);
           }
         }
 
         let body: string | undefined;
         if (item.request.body) {
           if (item.request.body.mode === "raw" && item.request.body.raw) {
-            body = item.request.body.raw;
+            // Decode HTML entities trong raw body (quan trọng cho JSON với &quot;)
+            body = decodeHtmlEntities(item.request.body.raw);
           } else if (item.request.body.mode === "formdata" && item.request.body.formdata) {
-            body = JSON.stringify(
-              Object.fromEntries(
-                item.request.body.formdata.map((f) => [f.key, f.value])
-              )
-            );
+            const formDataObj: Record<string, string> = {};
+            item.request.body.formdata.forEach((f) => {
+              // Decode HTML entities trong form data values
+              formDataObj[decodeHtmlEntities(f.key)] = decodeHtmlEntities(f.value);
+            });
+            body = JSON.stringify(formDataObj);
           } else if (item.request.body.mode === "urlencoded" && item.request.body.urlencoded) {
-            body = JSON.stringify(
-              Object.fromEntries(
-                item.request.body.urlencoded.map((f) => [f.key, f.value])
-              )
-            );
+            const urlEncodedObj: Record<string, string> = {};
+            item.request.body.urlencoded.forEach((f) => {
+              // Decode HTML entities trong urlencoded values
+              urlEncodedObj[decodeHtmlEntities(f.key)] = decodeHtmlEntities(f.value);
+            });
+            body = JSON.stringify(urlEncodedObj);
           }
         }
 
         const queryParams: Array<{ key: string; value: string; enabled: boolean }> = [];
         if (typeof item.request.url !== "string" && item.request.url.query) {
           for (const query of item.request.url.query) {
+            // Decode HTML entities trong query params
             queryParams.push({
-              key: query.key,
-              value: query.value,
+              key: decodeHtmlEntities(query.key),
+              value: decodeHtmlEntities(query.value),
               enabled: !query.disabled,
             });
           }
@@ -129,7 +164,12 @@ export function importPostmanCollection(
     requests,
   };
 
-  return { collection, requests };
+  // Trả về cả variables từ Postman collection để có thể tạo environment
+  return { 
+    collection, 
+    requests,
+    variables: postmanData.variable || []
+  };
 }
 
 /**

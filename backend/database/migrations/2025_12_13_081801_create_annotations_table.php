@@ -10,7 +10,9 @@ return new class extends Migration
     {
         Schema::create('annotations', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('request_id')->constrained()->onDelete('cascade');
+            // request_id không có foreign key vì bảng requests không tồn tại
+            // Requests được lưu trong JSON data của collection
+            $table->unsignedBigInteger('request_id');
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->enum('type', ['note', 'highlight'])->default('note');
             $table->text('content');
@@ -24,5 +26,6 @@ return new class extends Migration
         Schema::dropIfExists('annotations');
     }
 };
+
 
 

@@ -11,7 +11,9 @@ return new class extends Migration
         Schema::create('comments', function (Blueprint $table) {
             $table->id();
             $table->foreignId('collection_id')->nullable()->constrained()->onDelete('cascade');
-            $table->foreignId('request_id')->nullable()->constrained()->onDelete('cascade');
+            // request_id không có foreign key vì bảng requests không tồn tại
+            // Requests được lưu trong JSON data của collection
+            $table->unsignedBigInteger('request_id')->nullable();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->text('content');
             $table->foreignId('parent_id')->nullable()->constrained('comments')->onDelete('cascade');
@@ -24,5 +26,6 @@ return new class extends Migration
         Schema::dropIfExists('comments');
     }
 };
+
 
 

@@ -16,7 +16,7 @@ export default function SaveRequestModal({
   onSave,
   defaultName = '',
 }: SaveRequestModalProps) {
-  const { collections } = useCollectionStore();
+  const { collections, defaultCollectionId } = useCollectionStore();
   const [selectedCollectionId, setSelectedCollectionId] = useState<string>('');
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [requestName, setRequestName] = useState(defaultName);
@@ -25,11 +25,16 @@ export default function SaveRequestModal({
   useEffect(() => {
     if (isOpen) {
       setRequestName(defaultName);
-      setSelectedCollectionId('');
+      // Auto-select default collection nếu có
+      if (defaultCollectionId) {
+        setSelectedCollectionId(defaultCollectionId);
+      } else {
+        setSelectedCollectionId('');
+      }
       setSelectedFolderId(null);
       setErrors({});
     }
-  }, [isOpen, defaultName]);
+  }, [isOpen, defaultName, defaultCollectionId]);
 
   const selectedCollection = collections.find((c) => c.id === selectedCollectionId);
 
@@ -117,7 +122,7 @@ export default function SaveRequestModal({
               <option value="">-- Chọn Collection --</option>
               {collections.map((collection) => (
                 <option key={collection.id} value={collection.id}>
-                  {collection.name}
+                  {collection.name}{collection.is_default ? ' (Default)' : ''}
                 </option>
               ))}
             </select>
@@ -171,7 +176,7 @@ export default function SaveRequestModal({
           <Button
             variant="primary"
             onClick={handleSave}
-            disabled={collections.length === 0}
+            disabled={collections.length === 0 || !selectedCollectionId}
           >
             Lưu
           </Button>

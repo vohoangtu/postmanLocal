@@ -156,19 +156,35 @@ return new class extends Migration
     }
 
     /**
-     * Check if index exists
+     * Check if index exists (compatible with SQLite and MySQL)
      */
     private function hasIndex(string $table, string $indexName): bool
     {
         $connection = Schema::getConnection();
-        $database = $connection->getDatabaseName();
+        $driver = $connection->getDriverName();
         
-        $result = $connection->select(
-            "SELECT COUNT(*) as count FROM information_schema.statistics 
-             WHERE table_schema = ? AND table_name = ? AND index_name = ?",
-            [$database, $table, $indexName]
-        );
-        
-        return $result[0]->count > 0;
+        try {
+            if ($driver === 'sqlite') {
+                // SQLite: Query sqlite_master table
+                $result = $connection->select(
+                    "SELECT name FROM sqlite_master 
+                     WHERE type = 'index' AND name = ? AND tbl_name = ?",
+                    [$indexName, $table]
+                );
+                return count($result) > 0;
+            } else {
+                // MySQL/PostgreSQL: Use information_schema
+                $database = $connection->getDatabaseName();
+                $result = $connection->select(
+                    "SELECT COUNT(*) as count FROM information_schema.statistics 
+                     WHERE table_schema = ? AND table_name = ? AND index_name = ?",
+                    [$database, $table, $indexName]
+                );
+                return $result[0]->count > 0;
+            }
+        } catch (\Exception $e) {
+            // Nếu có lỗi, giả sử index chưa tồn tại
+            return false;
+        }
     }
 };

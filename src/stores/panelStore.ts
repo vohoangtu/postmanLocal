@@ -43,8 +43,8 @@ interface PanelState {
 }
 
 export const usePanelStore = create<PanelState>((set, get) => ({
-  leftPanelView: null,
-  isLeftPanelOpen: false,
+  leftPanelView: "collections", // Mặc định mở Collections khi app khởi động
+  isLeftPanelOpen: true, // Mở panel mặc định
   activeViewTab: "response",
   isCommandPaletteOpen: false,
   activeCollaborationTab: null,

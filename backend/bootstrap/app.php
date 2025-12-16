@@ -10,6 +10,11 @@ return Application::configure(basePath: dirname(__DIR__))
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
+        then: function () {
+            Route::middleware('api')
+                ->prefix('api')
+                ->group(base_path('routes/admin.php'));
+        },
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->api(prepend: [
@@ -21,8 +26,23 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api(append: [
             \App\Http\Middleware\SanitizeInput::class,
         ]);
+
+        // Admin middleware alias
+        $middleware->alias([
+            'admin' => \App\Http\Middleware\CheckAdmin::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // Cấu hình xử lý AuthenticationException
+        $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, $request) {
+            // Luôn trả về JSON response cho API routes
+            // Vì đây là API-only application, không có web login page
+            return response()->json([
+                'message' => 'Bạn chưa đăng nhập hoặc phiên đăng nhập đã hết hạn.',
+                'error' => 'Unauthenticated',
+            ], 401);
+        });
+
         // Không expose sensitive information trong errors
         $exceptions->render(function (\Throwable $e, $request) {
             // Log detailed error
@@ -41,8 +61,6 @@ return Application::configure(basePath: dirname(__DIR__))
                 $userMessage = 'Đã xảy ra lỗi. Vui lòng thử lại sau.';
                 if ($e instanceof \Illuminate\Validation\ValidationException) {
                     $userMessage = 'Dữ liệu không hợp lệ. Vui lòng kiểm tra lại.';
-                } elseif ($e instanceof \Illuminate\Auth\AuthenticationException) {
-                    $userMessage = 'Bạn chưa đăng nhập hoặc phiên đăng nhập đã hết hạn.';
                 } elseif ($e instanceof \Illuminate\Auth\Access\AuthorizationException) {
                     $userMessage = 'Bạn không có quyền thực hiện hành động này.';
                 } elseif ($e instanceof \Symfony\Component\HttpKernel\Exception\NotFoundHttpException) {

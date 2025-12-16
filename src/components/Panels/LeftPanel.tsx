@@ -21,6 +21,7 @@ import RequestChainBuilder from "../RequestChaining/RequestChainBuilder";
 import TemplateLibrary from "../Templates/TemplateLibrary";
 import Button from "../UI/Button";
 import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts";
+import FeatureGate from "../FeatureGate/FeatureGate";
 
 interface LeftPanelProps {
   view: "collections" | "history" | "templates" | "environments" | "schema" | "mock" | "docs" | "workspaces" | "chains" | null;
@@ -74,26 +75,32 @@ export default function LeftPanel({ view, isOpen, onClose, onNewRequest }: LeftP
     switch (view) {
       case "collections":
         return (
-          <div className="p-4 space-y-4">
-            <CollectionManager />
-            <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-              <ImportExport />
+          <FeatureGate feature="collections">
+            <div className="p-4 space-y-4">
+              <CollectionManager />
+              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                <ImportExport />
+              </div>
             </div>
-          </div>
+          </FeatureGate>
         );
       case "history":
         return <RequestHistory />;
       case "templates":
         return (
-          <div className="p-4">
-            <TemplateLibrary />
-          </div>
+          <FeatureGate feature="templates">
+            <div className="p-4">
+              <TemplateLibrary />
+            </div>
+          </FeatureGate>
         );
       case "environments":
         return (
-          <div className="p-4">
-            <EnvironmentManager />
-          </div>
+          <FeatureGate feature="environments">
+            <div className="p-4">
+              <EnvironmentManager />
+            </div>
+          </FeatureGate>
         );
       case "schema":
         return (
@@ -103,9 +110,11 @@ export default function LeftPanel({ view, isOpen, onClose, onNewRequest }: LeftP
         );
       case "mock":
         return (
-          <Suspense fallback={<div className="p-4 text-center"><Loader2 className="animate-spin mx-auto" /></div>}>
-            <MockServerPanel />
-          </Suspense>
+          <FeatureGate feature="mock_server">
+            <Suspense fallback={<div className="p-4 text-center"><Loader2 className="animate-spin mx-auto" /></div>}>
+              <MockServerPanel />
+            </Suspense>
+          </FeatureGate>
         );
       case "docs":
         return (
@@ -121,9 +130,11 @@ export default function LeftPanel({ view, isOpen, onClose, onNewRequest }: LeftP
         );
       case "chains":
         return (
-          <div className="p-4">
-            <RequestChainBuilder />
-          </div>
+          <FeatureGate feature="request_chaining">
+            <div className="p-4">
+              <RequestChainBuilder />
+            </div>
+          </FeatureGate>
         );
       default:
         return null;

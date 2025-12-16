@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
+import { authService } from "../../services/authService";
 import { useToast } from "../../hooks/useToast";
 import Button from "../UI/Button";
 import { X } from "lucide-react";
@@ -24,7 +25,7 @@ export default function InviteMemberModal({ workspaceId, onClose }: InviteMember
 
     setLoading(true);
     try {
-      const token = localStorage.getItem("auth_token");
+      const token = await authService.getAccessToken();
       if (!token) {
         toast.error("Vui lòng đăng nhập");
         return;
@@ -117,5 +118,7 @@ export default function InviteMemberModal({ workspaceId, onClose }: InviteMember
     </div>
   );
 }
+
+
 
 

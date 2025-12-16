@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import AuthConfig from "../Auth/AuthConfig";
 import RequestActions from "./RequestActions";
 import RequestStatus from "../Loading/RequestStatus";
@@ -7,6 +7,7 @@ import GraphQLRequestBuilder from "./GraphQLRequestBuilder";
 import WebSocketTester from "../WebSocket/WebSocketTester";
 import Button from "../UI/Button";
 import TabButton from "../UI/TabButton";
+import Select from "../UI/Select";
 import { useToast } from "../../hooks/useToast";
 import { useEnvironmentStore } from "../../stores/environmentStore";
 import { useRequestHistoryStore } from "../../stores/requestHistoryStore";
@@ -14,12 +15,15 @@ import { useTabStore } from "../../stores/tabStore";
 import { usePanelStore } from "../../stores/panelStore";
 import Tooltip from "../UI/Tooltip";
 import { useCollectionStore } from "../../stores/collectionStore";
+import { useAuth } from "../../contexts/AuthContext";
 import { saveRequest } from "../../services/storageService";
 import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts";
 import { Code2, Network, MessageSquare, StickyNote, X, Send, Save, Settings } from "lucide-react";
 import CommentsPanel from "../Comments/CommentsPanel";
 import AnnotationEditor from "../Annotations/AnnotationEditor";
 import ComponentErrorBoundary from "../Error/ComponentErrorBoundary";
+import { useFeatureGate } from "../../hooks/useFeatureGate";
+import FeatureLockedMessage from "../FeatureGate/FeatureLockedMessage";
 
 interface RequestBuilderProps {
   requestId: string | null;
@@ -30,7 +34,8 @@ interface RequestBuilderProps {
 export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProps) {
   const { addToHistory } = useRequestHistoryStore();
   const { getTab, updateTab, closeTab } = useTabStore();
-  const { addRequestToCollection } = useCollectionStore();
+  const { addRequestToCollection, triggerReload, defaultCollectionId } = useCollectionStore();
+  const { isAuthenticated } = useAuth();
   const toast = useToast();
   const [requestStatus, setRequestStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -56,16 +61,93 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
   const { activeCollaborationTab, setActiveCollaborationTab } = usePanelStore();
   const [savedRequestId, setSavedRequestId] = useState<string | null>(null);
   const [savedCollectionId, setSavedCollectionId] = useState<string | null>(null);
-  const { replaceVariables } = useEnvironmentStore();
-
-  useEffect(() => {
-    if (tabId && tab) {
-      setMethod(tab.method);
-      setUrl(tab.url);
-      setHeaders(tab.requestData?.headers || [{ key: "", value: "" }]);
-      setBody(tab.requestData?.body || "");
+  const { replaceVariables, activeEnvironment, environments, setActiveEnvironment } = useEnvironmentStore();
+  
+  // Feature gates
+  const graphqlGate = useFeatureGate("graphql");
+  const websocketGate = useFeatureGate("websocket");
+  
+  const handleRequestTypeChange = (type: "rest" | "graphql" | "websocket") => {
+    if (type === "graphql" && !graphqlGate.allowed) {
+      toast.error("Bạn cần hoàn thành hướng dẫn để sử dụng GraphQL");
+      return;
     }
-  }, [tabId, tab]);
+    if (type === "websocket" && !websocketGate.allowed) {
+      toast.error("Bạn cần hoàn thành hướng dẫn để sử dụng WebSocket");
+      return;
+    }
+    setRequestType(type);
+  };
+
+  // Track previous tabId để detect khi tab thay đổi
+  const prevTabIdRef = useRef<string | undefined>(tabId);
+  
+  // Load data từ tab khi tabId thay đổi
+  useEffect(() => {
+    // Chỉ load khi tabId thực sự thay đổi
+    if (prevTabIdRef.current === tabId) {
+      return;
+    }
+    prevTabIdRef.current = tabId;
+
+    if (!tabId) {
+      // Reset state nếu không có tabId
+      setMethod("GET");
+      setUrl("");
+      setHeaders([{ key: "", value: "" }]);
+      setBody("");
+      setQueryParams([{ key: "", value: "", enabled: true }]);
+      isInitialLoad.current = true;
+      return;
+    }
+
+    const currentTab = getTab(tabId);
+    if (!currentTab) {
+      return;
+    }
+
+    // Set flag để skip update trong lần đầu
+    isInitialLoad.current = true;
+
+    // Deep copy để tránh reference sharing và đảm bảo data được load đúng
+    setMethod(currentTab.method || "GET");
+    setUrl(currentTab.url || "");
+    
+    // Deep copy headers
+    const headersCopy = currentTab.requestData?.headers && Array.isArray(currentTab.requestData.headers)
+      ? currentTab.requestData.headers.map((h: any) => ({ 
+          key: String(h.key || ''), 
+          value: String(h.value || '') 
+        }))
+      : [{ key: "", value: "" }];
+    setHeaders(headersCopy);
+    
+    // Deep copy body
+    setBody(currentTab.requestData?.body ? String(currentTab.requestData.body) : "");
+    
+    // Deep copy queryParams
+    if (currentTab.requestData?.queryParams && Array.isArray(currentTab.requestData.queryParams)) {
+      const queryParamsCopy = currentTab.requestData.queryParams.map((qp: any) => ({
+        key: String(qp.key || ''),
+        value: String(qp.value || ''),
+        enabled: qp.enabled !== undefined ? Boolean(qp.enabled) : true,
+      }));
+      setQueryParams(queryParamsCopy);
+    } else {
+      setQueryParams([{ key: "", value: "", enabled: true }]);
+    }
+
+    // Reset các state khác khi chuyển tab
+    setRequestStatus("idle");
+    setShowSaveModal(false);
+    setSavedRequestId(null);
+    setSavedCollectionId(null);
+
+    // Reset flag sau một tick để cho phép update tiếp theo
+    setTimeout(() => {
+      isInitialLoad.current = false;
+    }, 0);
+  }, [tabId, getTab]);
 
   // Keyboard shortcuts
   useKeyboardShortcuts([
@@ -101,19 +183,27 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
     },
   ]);
 
+  // Update tab khi state thay đổi (nhưng không update khi đang load từ tab)
+  const isInitialLoad = useRef(false);
+  
   useEffect(() => {
-    if (tabId) {
-      updateTab(tabId, {
-        method,
-        url,
-        requestData: {
-          headers,
-          body,
-          queryParams,
-        },
-        isDirty: true,
-      });
+    if (!tabId) return;
+    
+    // Skip update khi đang load từ tab
+    if (isInitialLoad.current) {
+      return;
     }
+
+    updateTab(tabId, {
+      method,
+      url,
+      requestData: {
+        headers,
+        body,
+        queryParams,
+      },
+      isDirty: true,
+    });
   }, [method, url, headers, body, queryParams, tabId, updateTab]);
 
   // const replaceVariables = (text: string): string => {
@@ -145,11 +235,16 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
     if (bodyType === "raw") {
       return replaceVariables(body);
     } else if (bodyType === "form-data") {
-      const form = new FormData();
+      // FormData: serialize thành format key=value&key2=value2 (tương tự urlencoded)
+      // Note: Với multipart/form-data thực sự, cần FormData object, nhưng vì apiService nhận string,
+      // nên tạm thời serialize thành format này. Có thể cần cải thiện sau để hỗ trợ file upload.
+      const params = new URLSearchParams();
       formData.forEach(item => {
-        if (item.key) form.append(replaceVariables(item.key), replaceVariables(item.value));
+        if (item.key) {
+          params.append(replaceVariables(item.key), replaceVariables(item.value));
+        }
       });
-      return form.toString();
+      return params.toString();
     } else if (bodyType === "x-www-form-urlencoded") {
       const params = new URLSearchParams();
       formData.forEach(item => {
@@ -311,6 +406,14 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
   const handleSaveRequest = async (collectionId: string, folderId: string | null, requestName: string) => {
     setIsSaving(true);
     try {
+      // Đảm bảo collectionId luôn có giá trị - sử dụng default nếu không có
+      const finalCollectionId = collectionId || defaultCollectionId;
+      if (!finalCollectionId) {
+        toast.error("Vui lòng chọn collection hoặc tạo collection mới");
+        setIsSaving(false);
+        return;
+      }
+
       const headersMap: Record<string, string> = {};
       headers.forEach((h) => {
         if (h.key) headersMap[replaceVariables(h.key)] = replaceVariables(h.value);
@@ -325,7 +428,7 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
         queryParams,
       };
 
-      const savedRequest = await saveRequest(requestData, collectionId, folderId || undefined);
+      const savedRequest = await saveRequest(requestData, finalCollectionId, folderId || undefined);
 
       // Lưu requestId và collectionId để hiển thị comments/annotations
       if (savedRequest?.id) {
@@ -334,7 +437,7 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
       }
 
       // Update collection store
-      addRequestToCollection(collectionId, {
+      addRequestToCollection(finalCollectionId, {
         id: savedRequest.id,
         name: savedRequest.name,
         method: savedRequest.method,
@@ -345,7 +448,12 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
         folderId: folderId || undefined,
       });
 
-      toast.success(`Request "${requestName}" đã được lưu vào collection`);
+      // Nếu đã đăng nhập, trigger reload collections để sync với backend
+      if (isAuthenticated) {
+        triggerReload();
+      }
+
+      toast.success(`Request "${requestName}" đã được lưu vào collection${isAuthenticated ? ' và đồng bộ với server' : ''}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Không thể lưu request");
     } finally {
@@ -373,6 +481,14 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
 
   // Render WebSocket tester if WebSocket is selected
   if (requestType === "websocket") {
+    if (!websocketGate.allowed) {
+      return (
+        <div className="flex-1 flex items-center justify-center bg-white dark:bg-gray-800">
+          <FeatureLockedMessage feature="websocket" reason={websocketGate.reason} />
+        </div>
+      );
+    }
+    
     return (
       <div className="flex-1 flex flex-col bg-white dark:bg-gray-800">
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
@@ -380,33 +496,23 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
             <div className="flex items-center gap-2 flex-1">
               <div className="flex items-center gap-1 border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden bg-white dark:bg-gray-800">
                 <button
-                  onClick={() => setRequestType("rest")}
-                  className={`h-9 px-3 text-sm font-medium transition-colors flex items-center justify-center ${
-                    (requestType as string) === "rest"
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  }`}
+                  onClick={() => handleRequestTypeChange("rest")}
+                  className="h-9 px-3 text-sm font-medium transition-colors flex items-center justify-center text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                 >
                   REST
                 </button>
                 <button
-                  onClick={() => setRequestType("graphql")}
-                  className={`h-9 px-3 text-sm font-medium transition-colors flex items-center justify-center gap-1 ${
-                    (requestType as string) === "graphql"
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  }`}
+                  onClick={() => handleRequestTypeChange("graphql")}
+                  className="h-9 px-3 text-sm font-medium transition-colors flex items-center justify-center gap-1 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  disabled={!graphqlGate.allowed}
+                  title={!graphqlGate.allowed ? graphqlGate.reason : undefined}
                 >
                   <Code2 size={16} />
                   GraphQL
                 </button>
                 <button
-                  onClick={() => setRequestType("websocket")}
-                  className={`h-9 px-3 text-sm font-medium transition-colors flex items-center justify-center gap-1 ${
-                    (requestType as string) === "websocket"
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  }`}
+                  onClick={() => handleRequestTypeChange("websocket")}
+                  className="h-9 px-3 text-sm font-medium transition-colors flex items-center justify-center gap-1 bg-blue-600 text-white"
                 >
                   <Network size={16} />
                   WebSocket
@@ -449,6 +555,14 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
 
   // Render GraphQL builder if GraphQL is selected
   if (requestType === "graphql") {
+    if (!graphqlGate.allowed) {
+      return (
+        <div className="flex-1 flex items-center justify-center bg-white dark:bg-gray-800">
+          <FeatureLockedMessage feature="graphql" reason={graphqlGate.reason} />
+        </div>
+      );
+    }
+    
     return (
       <div className="flex-1 flex flex-col bg-white dark:bg-gray-800">
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
@@ -456,7 +570,7 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
             <div className="flex items-center gap-2 flex-1">
               <div className="flex items-center gap-1 border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden bg-white dark:bg-gray-800">
                 <button
-                  onClick={() => setRequestType("rest")}
+                  onClick={() => handleRequestTypeChange("rest")}
                   className={`h-9 px-3 text-sm font-medium transition-colors flex items-center justify-center ${
                     (requestType as string) === "rest"
                       ? "bg-blue-600 text-white"
@@ -466,7 +580,7 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
                   REST
                 </button>
                 <button
-                  onClick={() => setRequestType("graphql")}
+                  onClick={() => handleRequestTypeChange("graphql")}
                   className={`h-9 px-3 text-sm font-medium transition-colors flex items-center justify-center gap-1 ${
                     (requestType as string) === "graphql"
                       ? "bg-blue-600 text-white"
@@ -477,12 +591,14 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
                   GraphQL
                 </button>
                 <button
-                  onClick={() => setRequestType("websocket")}
+                  onClick={() => handleRequestTypeChange("websocket")}
                   className={`h-9 px-3 text-sm font-medium transition-colors flex items-center justify-center gap-1 ${
                     (requestType as string) === "websocket"
                       ? "bg-blue-600 text-white"
                       : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                   }`}
+                  disabled={!websocketGate.allowed}
+                  title={!websocketGate.allowed ? websocketGate.reason : undefined}
                 >
                   <Network size={16} />
                   WebSocket
@@ -546,34 +662,41 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
         <div className="flex items-center justify-between gap-3">
           {/* Request Type Selector */}
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden bg-white dark:bg-gray-800">
+            {/* Request Type Selector - Tạm thời chỉ hiển thị REST */}
+            {/* <div className="flex items-center gap-1 border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden bg-white dark:bg-gray-800">
               <TabButton
                 variant="filled"
-                active={requestType === "rest"}
-                onClick={() => setRequestType("rest")}
+                active={true}
+                onClick={() => handleRequestTypeChange("rest")}
                 showIndicator={false}
               >
                 REST
               </TabButton>
               <TabButton
                 variant="filled"
-                active={requestType === "graphql"}
-                onClick={() => setRequestType("graphql")}
+                active={false}
+                onClick={() => handleRequestTypeChange("graphql")}
                 icon={Code2}
                 showIndicator={false}
+                disabled={!graphqlGate.allowed}
+                title={!graphqlGate.allowed ? graphqlGate.reason : undefined}
+                className={!graphqlGate.allowed ? "opacity-50 cursor-not-allowed" : ""}
               >
                 GraphQL
               </TabButton>
               <TabButton
                 variant="filled"
-                active={requestType === "websocket"}
-                onClick={() => setRequestType("websocket")}
+                active={false}
+                onClick={() => handleRequestTypeChange("websocket")}
                 icon={Network}
                 showIndicator={false}
+                disabled={!websocketGate.allowed}
+                title={!websocketGate.allowed ? websocketGate.reason : undefined}
+                className={!websocketGate.allowed ? "opacity-50 cursor-not-allowed" : ""}
               >
                 WebSocket
               </TabButton>
-            </div>
+            </div> */}
 
             {/* Method Selector */}
             <select
@@ -589,6 +712,20 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
               <option>HEAD</option>
               <option>OPTIONS</option>
             </select>
+
+            {/* Environment Selector */}
+            <Select
+              value={activeEnvironment || ""}
+              onChange={(e) => setActiveEnvironment(e.target.value || null)}
+              options={[
+                { value: "", label: "No Environment" },
+                ...environments.map((env) => ({
+                  value: env.id,
+                  label: env.name,
+                })),
+              ]}
+              className="w-48"
+            />
 
             {/* URL Input */}
             <input
@@ -611,6 +748,7 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
                 disabled={requestStatus === "sending"}
                 loading={requestStatus === "sending"}
                 className="flex items-center gap-1.5"
+                data-onboarding="send-button"
               >
                 <Send size={14} />
                 Send
