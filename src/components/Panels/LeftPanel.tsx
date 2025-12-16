@@ -155,19 +155,19 @@ export default function LeftPanel({ view, isOpen, onClose, onNewRequest }: LeftP
       {/* Panel */}
       <div className={`
         fixed md:relative inset-y-0 left-0 z-50 md:z-auto
-        w-full md:w-full
+        w-full md:w-80 lg:w-96
         bg-white dark:bg-gray-800 
-        border-r border-gray-200 dark:border-gray-700 
+        border-r border-gray-300 dark:border-gray-700 
         flex flex-col h-full 
-        shadow-xl md:shadow-xl
+        shadow-lg md:shadow-md
         transform transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-          <div className="flex items-center gap-2">
-            <div className="w-1 h-6 bg-blue-600 rounded-full" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+        <div className="flex items-center justify-between p-4 border-b border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <div className="flex items-center gap-2.5">
+            <div className="w-1.5 h-7 bg-gradient-to-b from-blue-600 to-blue-500 rounded-full shadow-sm" />
+            <h2 className="text-base font-semibold text-gray-900 dark:text-white">
               {getTitle()}
             </h2>
           </div>
@@ -176,7 +176,7 @@ export default function LeftPanel({ view, isOpen, onClose, onNewRequest }: LeftP
             size="sm"
             onClick={onClose}
             title="Đóng panel (Esc)"
-            className="hover:bg-gray-200 dark:hover:bg-gray-700"
+            className="hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
             aria-label="Close panel"
           >
             <X size={18} />
@@ -184,7 +184,7 @@ export default function LeftPanel({ view, isOpen, onClose, onNewRequest }: LeftP
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600">
+        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 bg-gray-50 dark:bg-gray-900/30">
           {renderContent()}
         </div>
       </div>

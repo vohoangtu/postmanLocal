@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
@@ -10,7 +9,7 @@ use Illuminate\Support\Str;
  * User Token Model
  * Quản lý token files cho user authentication
  */
-class UserToken extends Model
+class UserToken extends BaseModel
 {
     protected $fillable = [
         'user_id',
@@ -63,7 +62,7 @@ class UserToken extends Model
     /**
      * Scope: Query tokens của user
      */
-    public function scopeForUser($query, int $userId)
+    public function scopeForUser($query, string $userId)
     {
         return $query->where('user_id', $userId);
     }

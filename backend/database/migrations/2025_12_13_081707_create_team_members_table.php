@@ -12,13 +12,15 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('team_members', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('team_id')->constrained('workspaces')->onDelete('cascade');
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->uuid('id')->primary();
+            $table->uuid('team_id');
+            $table->uuid('user_id');
             $table->enum('role', ['owner', 'admin', 'member', 'viewer'])->default('member');
             $table->timestamp('joined_at')->useCurrent();
             $table->timestamps();
             
+            $table->foreign('team_id')->references('id')->on('workspaces')->onDelete('cascade');
+            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
             $table->unique(['team_id', 'user_id']);
         });
     }

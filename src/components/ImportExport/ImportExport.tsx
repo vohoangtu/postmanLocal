@@ -344,7 +344,7 @@ export default function ImportExport({ onImportSuccess }: ImportExportProps = {}
                     {collection.name}
                   </span>
                   <span className="text-xs text-gray-500 dark:text-gray-400">
-                    {collection.requests.length} requests
+                    {collection.requests?.length || 0} requests
                   </span>
                 </div>
                 <div className="flex gap-2">

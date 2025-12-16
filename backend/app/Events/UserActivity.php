@@ -32,7 +32,10 @@ class UserActivity implements ShouldBroadcast
 
     public function broadcastOn()
     {
-        return new PresenceChannel('workspace.' . $this->workspaceId);
+        return [
+            new PresenceChannel('presence-workspace.' . $this->workspaceId),
+            new PrivateChannel('private-workspace.' . $this->workspaceId),
+        ];
     }
 
     public function broadcastAs()

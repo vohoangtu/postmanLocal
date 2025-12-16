@@ -93,6 +93,13 @@ export async function updateCollectionRequests(
     requests: requests,
   };
 
+  console.log('Updating collection requests:', {
+    collectionId,
+    currentRequestsCount: currentData?.requests?.length || 0,
+    newRequestsCount: requests.length,
+    updatedData
+  });
+
   const response = await fetch(`${API_BASE_URL}/collections/${collectionId}`, {
     method: 'PUT',
     headers: {
@@ -100,7 +107,7 @@ export async function updateCollectionRequests(
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({
-      data: updatedData,
+      data: updatedData, // Laravel sẽ tự động cast thành JSON
     }),
   });
 
@@ -130,30 +137,37 @@ export async function addRequestToCollection(
     throw new Error('Chưa đăng nhập');
   }
 
-  // Lấy collection hiện tại
-  const collection = await getCollection(collectionId);
+  try {
+    // Lấy collection hiện tại
+    const collection = await getCollection(collectionId);
 
-  // Parse collection.data
-  const currentData = parseCollectionData(collection.data);
+    // Parse collection.data
+    const currentData = parseCollectionData(collection.data);
 
-  // Lấy requests hiện tại từ collection.data
-  const currentRequests: Request[] = currentData?.requests || [];
+    // Lấy requests hiện tại từ collection.data
+    const currentRequests: Request[] = currentData?.requests || [];
 
-  // Kiểm tra request đã tồn tại chưa (theo id)
-  const existingIndex = currentRequests.findIndex((r: Request) => r.id === request.id);
-  let updatedRequests: Request[];
+    // Kiểm tra request đã tồn tại chưa (theo id)
+    const existingIndex = currentRequests.findIndex((r: Request) => r.id === request.id);
+    let updatedRequests: Request[];
 
-  if (existingIndex >= 0) {
-    // Update request hiện có
-    updatedRequests = [...currentRequests];
-    updatedRequests[existingIndex] = request;
-  } else {
-    // Thêm request mới
-    updatedRequests = [...currentRequests, request];
+    if (existingIndex >= 0) {
+      // Update request hiện có
+      updatedRequests = [...currentRequests];
+      updatedRequests[existingIndex] = request;
+    } else {
+      // Thêm request mới
+      updatedRequests = [...currentRequests, request];
+    }
+
+    // Update collection với requests mới
+    const result = await updateCollectionRequests(collectionId, updatedRequests);
+    console.log('Request added to collection successfully:', { collectionId, requestId: request.id, totalRequests: updatedRequests.length });
+    return result;
+  } catch (error) {
+    console.error('Error adding request to collection:', error);
+    throw error;
   }
-
-  // Update collection với requests mới
-  return await updateCollectionRequests(collectionId, updatedRequests);
 }
 
 /**

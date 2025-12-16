@@ -73,11 +73,22 @@ export const useCollectionStore = create<CollectionStore>((set, get) => ({
     })),
   addRequestToCollection: (collectionId, request) =>
     set((state) => ({
-      collections: state.collections.map((c) =>
-        c.id === collectionId
-          ? { ...c, requests: [...c.requests, request] }
-          : c
-      ),
+      collections: state.collections.map((c) => {
+        if (c.id === collectionId) {
+          // Kiểm tra request đã tồn tại chưa (theo id)
+          const existingIndex = c.requests.findIndex((r) => r.id === request.id);
+          if (existingIndex >= 0) {
+            // Update request hiện có
+            const updatedRequests = [...c.requests];
+            updatedRequests[existingIndex] = request;
+            return { ...c, requests: updatedRequests };
+          } else {
+            // Thêm request mới
+            return { ...c, requests: [...c.requests, request] };
+          }
+        }
+        return c;
+      }),
     })),
   updateRequestInCollection: async (collectionId, requestId, updates) => {
     // Update local store

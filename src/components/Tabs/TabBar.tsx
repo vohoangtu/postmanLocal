@@ -72,12 +72,12 @@ export default function TabBar() {
   if (tabs.length === 0) return null;
 
   return (
-    <div className="relative flex items-center bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+    <div className="relative flex items-center bg-white dark:bg-gray-800 border-b-2 border-gray-300 dark:border-gray-700 shadow-md">
       {/* Scroll Left Button */}
       {canScrollLeft && (
         <button
           onClick={scrollLeft}
-          className="absolute left-0 z-10 h-full px-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center"
+          className="absolute left-0 z-10 h-full px-2 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center shadow-sm"
           aria-label="Scroll left"
         >
           <ChevronLeft size={16} className="text-gray-600 dark:text-gray-400" />
@@ -98,10 +98,10 @@ export default function TabBar() {
           <div
             key={tab.id}
             data-tab-id={tab.id}
-            className={`group flex items-center gap-2 px-3 py-2 border-r border-gray-200 dark:border-gray-700 cursor-pointer min-w-[180px] max-w-[250px] transition-colors flex-shrink-0 ${
+            className={`group flex items-center gap-2 px-3 py-2 border-r border-gray-300 dark:border-gray-700 cursor-pointer min-w-[180px] max-w-[250px] transition-all flex-shrink-0 ${
               activeTabId === tab.id
-                ? "bg-white dark:bg-gray-900 border-b-2 border-blue-600 shadow-sm"
-                : "bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700"
+                ? "bg-white dark:bg-gray-900 border-b-2 border-blue-600 shadow-md font-medium"
+                : "bg-gray-50 dark:bg-gray-800 hover:bg-white dark:hover:bg-gray-700"
             }`}
             onClick={() => setActiveTab(tab.id)}
           >
@@ -122,7 +122,7 @@ export default function TabBar() {
           >
             {tab.method}
           </span>
-          <span className="flex-1 text-xs text-gray-700 dark:text-gray-300 truncate font-medium">
+          <span className="flex-1 text-xs text-gray-800 dark:text-gray-200 truncate">
             {tab.name}
           </span>
           {tab.isDirty && (
@@ -136,9 +136,9 @@ export default function TabBar() {
                 e.stopPropagation();
                 closeTab(tab.id);
               }}
-              className="opacity-0 group-hover:opacity-100 hover:bg-gray-200 dark:hover:bg-gray-600 rounded p-0.5 transition-opacity flex-shrink-0"
+              className="opacity-0 group-hover:opacity-100 hover:bg-gray-300 dark:hover:bg-gray-600 rounded p-0.5 transition-opacity flex-shrink-0"
             >
-              <X size={14} className="text-gray-500 dark:text-gray-400" />
+              <X size={14} className="text-gray-600 dark:text-gray-400" />
             </button>
           </Tooltip>
           </div>
@@ -149,7 +149,7 @@ export default function TabBar() {
       {canScrollRight && (
         <button
           onClick={scrollRight}
-          className="absolute right-0 z-10 h-full px-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center"
+          className="absolute right-0 z-10 h-full px-2 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center shadow-sm"
           aria-label="Scroll right"
         >
           <ChevronRight size={16} className="text-gray-600 dark:text-gray-400" />
@@ -162,7 +162,7 @@ export default function TabBar() {
           <Tooltip content="Đóng tất cả tabs (giữ lại tab đang active)">
             <button
               onClick={closeAllTabs}
-              className="px-2 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors flex items-center gap-1"
+              className="px-2 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors flex items-center gap-1 font-medium"
               aria-label="Close all tabs"
             >
               <X size={14} />

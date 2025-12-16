@@ -398,5 +398,43 @@ class CollectionController extends BaseController
             'collection' => $collection->load(['user', 'workspace']),
         ]);
     }
+
+    /**
+     * Get workspace templates
+     */
+    public function getWorkspaceTemplates(Request $request, string $workspaceId)
+    {
+        // Check if user has access to workspace
+        $workspace = \App\Models\Workspace::where('owner_id', Auth::id())
+            ->orWhereHas('teamMembers', function ($query) {
+                $query->where('user_id', Auth::id());
+            })
+            ->findOrFail($workspaceId);
+
+        $query = Collection::where('workspace_id', $workspaceId)
+            ->where('is_template', true)
+            ->with(['user', 'workspace'])
+            ->orderBy('updated_at', 'desc');
+
+        // Filter by category
+        if ($request->has('category') && $request->category) {
+            $query->where('template_category', $request->category);
+        }
+
+        // Search
+        if ($request->has('search') && $request->search) {
+            $query->where(function ($q) use ($request) {
+                $q->where('name', 'like', '%' . $request->search . '%')
+                    ->orWhere('description', 'like', '%' . $request->search . '%');
+            });
+        }
+
+        // Pagination
+        if ($request->has('page') || $request->has('per_page')) {
+            return $this->paginate($query, $request);
+        }
+
+        return response()->json($query->get());
+    }
 }
 

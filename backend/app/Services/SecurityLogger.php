@@ -18,7 +18,7 @@ class SecurityLogger
      */
     public function logEvent(
         string $eventType,
-        ?int $userId = null,
+        ?string $userId = null,
         ?array $metadata = null,
         ?Request $request = null
     ): void {
@@ -58,7 +58,7 @@ class SecurityLogger
     /**
      * Log login success
      */
-    public function logLoginSuccess(int $userId, Request $request): void
+    public function logLoginSuccess(string $userId, Request $request): void
     {
         $this->logEvent('login_success', $userId, null, $request);
     }
@@ -87,7 +87,7 @@ class SecurityLogger
     /**
      * Log password reset success
      */
-    public function logPasswordResetSuccess(int $userId, Request $request): void
+    public function logPasswordResetSuccess(string $userId, Request $request): void
     {
         $this->logEvent('password_reset_success', $userId, null, $request);
     }
@@ -95,7 +95,7 @@ class SecurityLogger
     /**
      * Log token revocation
      */
-    public function logTokenRevoked(int $userId, Request $request, ?string $tokenId = null): void
+    public function logTokenRevoked(string $userId, Request $request, ?string $tokenId = null): void
     {
         $this->logEvent('token_revoked', $userId, [
             'token_id' => $tokenId,
@@ -105,7 +105,7 @@ class SecurityLogger
     /**
      * Log account lockout
      */
-    public function logAccountLockout(int $userId, Request $request): void
+    public function logAccountLockout(string $userId, Request $request): void
     {
         $this->logEvent('account_locked', $userId, null, $request);
     }
@@ -113,7 +113,7 @@ class SecurityLogger
     /**
      * Log 2FA enabled
      */
-    public function log2FAEnabled(int $userId, Request $request): void
+    public function log2FAEnabled(string $userId, Request $request): void
     {
         $this->logEvent('2fa_enabled', $userId, null, $request);
     }
@@ -121,7 +121,7 @@ class SecurityLogger
     /**
      * Log 2FA disabled
      */
-    public function log2FADisabled(int $userId, Request $request): void
+    public function log2FADisabled(string $userId, Request $request): void
     {
         $this->logEvent('2fa_disabled', $userId, null, $request);
     }

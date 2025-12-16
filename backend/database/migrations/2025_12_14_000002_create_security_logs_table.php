@@ -12,14 +12,15 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('security_logs', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('user_id')->nullable()->constrained()->onDelete('cascade');
+            $table->uuid('id')->primary();
+            $table->uuid('user_id')->nullable();
             $table->string('event_type'); // login_success, login_failed, password_reset, token_revoked, etc.
             $table->string('ip_address', 45)->nullable();
             $table->text('user_agent')->nullable();
             $table->json('metadata')->nullable();
             $table->timestamp('created_at');
 
+            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
             $table->index(['user_id', 'created_at']);
             $table->index(['event_type', 'created_at']);
             $table->index('ip_address');

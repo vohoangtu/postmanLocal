@@ -9,9 +9,11 @@ import { useAuth } from '../contexts/AuthContext';
 import AuthGuard from './Auth/AuthGuard';
 import ProtectedRoute from './Auth/ProtectedRoute';
 import MainApp from './MainApp';
+import GlobalNavBar from './Navigation/GlobalNavBar';
 
 // Lazy load components
 const AdminRoutes = lazy(() => import('../routes/AdminRoutes'));
+const WorkspaceRoutes = lazy(() => import('../routes/WorkspaceRoutes'));
 const UserPanel = lazy(() => import('./User/UserPanel'));
 const Login = lazy(() => import('./Auth/Login'));
 const Register = lazy(() => import('./Auth/Register'));
@@ -30,20 +32,22 @@ export default function AppRouter() {
   }
 
   return (
-    <Routes>
-      {/* Public routes */}
-      <Route
-        path="/login"
-        element={
-          isAuthenticated ? (
-            <Navigate to="/" replace />
-          ) : (
-            <Suspense fallback={<div className="flex items-center justify-center h-screen">Đang tải...</div>}>
-              <Login />
-            </Suspense>
-          )
-        }
-      />
+    <>
+      <GlobalNavBar />
+      <Routes>
+        {/* Public routes */}
+        <Route
+          path="/login"
+          element={
+            isAuthenticated ? (
+              <Navigate to="/" replace />
+            ) : (
+              <Suspense fallback={<div className="flex items-center justify-center h-screen">Đang tải...</div>}>
+                <Login />
+              </Suspense>
+            )
+          }
+        />
       <Route
         path="/register"
         element={
@@ -103,6 +107,18 @@ export default function AppRouter() {
         }
       />
 
+      {/* Workspace routes */}
+      <Route
+        path="/workspace/*"
+        element={
+          <ProtectedRoute>
+            <Suspense fallback={<div className="flex items-center justify-center h-screen">Đang tải workspace...</div>}>
+              <WorkspaceRoutes />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
       {/* Welcome route (optional, có thể redirect sau login) */}
       <Route
         path="/welcome"
@@ -115,8 +131,9 @@ export default function AppRouter() {
         }
       />
 
-      {/* Catch all - redirect to home */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        {/* Catch all - redirect to home */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }

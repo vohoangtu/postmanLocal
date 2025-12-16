@@ -147,9 +147,9 @@ export default function FolderManager({ collectionId }: FolderManagerProps) {
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <h4 className="text-xs font-semibold text-gray-600 dark:text-gray-400">
+    <div className="space-y-2.5">
+      <div className="flex items-center justify-between gap-2 pb-2 border-b border-gray-200 dark:border-gray-700">
+        <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300">
           Requests ({currentCollection.requests.length})
         </h4>
         <div className="flex items-center gap-2">
@@ -178,19 +178,29 @@ export default function FolderManager({ collectionId }: FolderManagerProps) {
       {/* Hiển thị requests không có folder */}
       {uncategorizedRequests.length > 0 && (
         <div className="space-y-1">
-          <div className="text-xs font-medium text-gray-500 dark:text-gray-400 px-2 py-1">
+          <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 px-2 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-md">
             Uncategorized
           </div>
           {uncategorizedRequests.map((request) => (
             <div
               key={request.id}
               onClick={() => handleRequestClick(request)}
-              className="group flex items-center gap-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
+              className="group flex items-center gap-2 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors"
             >
-              <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+              <span className={`text-xs font-mono px-2 py-0.5 rounded-md font-semibold ${
+                request.method === "GET"
+                  ? "text-blue-800 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40 border border-blue-300 dark:border-blue-700"
+                  : request.method === "POST"
+                  ? "text-green-800 dark:text-green-300 bg-green-100 dark:bg-green-900/40 border border-green-300 dark:border-green-700"
+                  : request.method === "PUT"
+                  ? "text-yellow-800 dark:text-yellow-300 bg-yellow-100 dark:bg-yellow-900/40 border border-yellow-300 dark:border-yellow-700"
+                  : request.method === "DELETE"
+                  ? "text-red-800 dark:text-red-300 bg-red-100 dark:bg-red-900/40 border border-red-300 dark:border-red-700"
+                  : "text-gray-800 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 border border-gray-400 dark:border-gray-600"
+              }`}>
                 {request.method}
               </span>
-              <span className="text-xs text-gray-700 dark:text-gray-300 flex-1 truncate">
+              <span className="text-xs text-gray-800 dark:text-gray-200 flex-1 truncate font-medium">
                 {request.name || 'Untitled Request'}
               </span>
               <Play size={12} className="opacity-0 group-hover:opacity-100 text-gray-400" />
@@ -211,10 +221,10 @@ export default function FolderManager({ collectionId }: FolderManagerProps) {
                 <div className="group flex items-center justify-between p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
                   <div className="flex items-center gap-2 flex-1">
                     <FolderIcon size={14} className="text-gray-500" />
-                    <span className="text-xs text-gray-700 dark:text-gray-300">
+                    <span className="text-xs font-semibold text-gray-800 dark:text-gray-200">
                       Folder {folderId}
                     </span>
-                    <span className="text-xs text-gray-500 dark:text-gray-500">
+                    <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
                       ({folderRequests.length})
                     </span>
                   </div>
@@ -223,8 +233,8 @@ export default function FolderManager({ collectionId }: FolderManagerProps) {
                   {folderRequests.map((request) => (
                     <div
                       key={request.id}
-                      onClick={() => handleRequestClick(request)}
-                      className="group flex items-center gap-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
+              onClick={() => handleRequestClick(request)}
+              className="group flex items-center gap-2 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors"
                     >
                       <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
                         {request.method}
@@ -270,8 +280,8 @@ export default function FolderManager({ collectionId }: FolderManagerProps) {
                   {folderRequests.map((request) => (
                     <div
                       key={request.id}
-                      onClick={() => handleRequestClick(request)}
-                      className="group flex items-center gap-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
+              onClick={() => handleRequestClick(request)}
+              className="group flex items-center gap-2 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors"
                     >
                       <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
                         {request.method}

@@ -9,7 +9,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('collections', function (Blueprint $table) {
-            $table->foreignId('current_version_id')->nullable()->after('is_shared')->constrained('collection_versions')->onDelete('set null');
+            $table->uuid('current_version_id')->nullable()->after('is_shared');
+            $table->foreign('current_version_id')->references('id')->on('collection_versions')->onDelete('set null');
         });
     }
 

@@ -2,14 +2,13 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Security Log Model
  * Lưu trữ các sự kiện bảo mật
  */
-class SecurityLog extends Model
+class SecurityLog extends BaseModel
 {
     public $timestamps = false;
 
@@ -46,7 +45,7 @@ class SecurityLog extends Model
     /**
      * Scope để lọc theo user
      */
-    public function scopeForUser($query, int $userId)
+    public function scopeForUser($query, string $userId)
     {
         return $query->where('user_id', $userId);
     }

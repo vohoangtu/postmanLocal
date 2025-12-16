@@ -9,8 +9,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('notifications', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->uuid('id')->primary();
+            $table->uuid('user_id');
             $table->string('type'); // 'collection_shared', 'comment_added', 'member_invited', etc.
             $table->string('title');
             $table->text('message');
@@ -18,6 +18,7 @@ return new class extends Migration
             $table->timestamp('read_at')->nullable();
             $table->timestamps();
             
+            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
             $table->index(['user_id', 'read_at']);
         });
     }

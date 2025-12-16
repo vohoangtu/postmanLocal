@@ -13,9 +13,12 @@ import ShareCollectionModal from "./ShareCollectionModal";
 import CollectionPermissionBadge from "./CollectionPermissionBadge";
 import CommentsPanel from "../Comments/CommentsPanel";
 import VersionHistory from "./VersionHistory";
+import CollectionDocumentation from "./CollectionDocumentation";
+import RequestTestRunner from "../RequestBuilder/RequestTestRunner";
+import LiveCollaborators from "../Workspaces/LiveCollaborators";
 import Button from "../UI/Button";
 import Select from "../UI/Select";
-import { Folder, Share2, MessageSquare, History, FileCode, Upload } from "lucide-react";
+import { Folder, Share2, MessageSquare, History, FileCode, Upload, Play } from "lucide-react";
 
 function CollectionManager() {
   const {
@@ -42,6 +45,7 @@ function CollectionManager() {
   const [sharingCollectionId, setSharingCollectionId] = useState<string | null>(null);
   const [showComments, setShowComments] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [showDocumentation, setShowDocumentation] = useState(false);
   const [showPublishTemplateModal, setShowPublishTemplateModal] = useState(false);
   const [publishingCollectionId, setPublishingCollectionId] = useState<string | null>(null);
   const [templateCategory, setTemplateCategory] = useState("");
@@ -553,22 +557,11 @@ function CollectionManager() {
   }, [collections, activeWorkspace]);
 
   return (
-    <div className="space-y-2">
-      <div className="space-y-2">
-        <Select
-          value={activeEnvironment || ""}
-          onChange={(e) => setActiveEnvironment(e.target.value || null)}
-          options={[
-            { value: "", label: "No Environment" },
-            ...environments.map((env) => ({
-              value: env.id,
-              label: env.name,
-            })),
-          ]}
-          fullWidth
-        />
+    <div className="space-y-3">
+      <div className="space-y-2.5">
         {workspaces.length > 0 && (
           <Select
+            label="Workspace"
             value={activeWorkspace || ""}
             onChange={(e) => {
               const { setActiveWorkspace } = useWorkspaceStore.getState();
@@ -584,10 +577,23 @@ function CollectionManager() {
             fullWidth
           />
         )}
+        <Select
+          label="Environment"
+          value={activeEnvironment || ""}
+          onChange={(e) => setActiveEnvironment(e.target.value || null)}
+          options={[
+            { value: "", label: "No Environment" },
+            ...environments.map((env) => ({
+              value: env.id,
+              label: env.name,
+            })),
+          ]}
+          fullWidth
+        />
         <Button
           variant="primary"
           onClick={() => setShowCreateModal(true)}
-          className="w-full"
+          className="w-full shadow-sm"
         >
           + New Collection
         </Button>
@@ -613,12 +619,12 @@ function CollectionManager() {
           filteredCollections.map((collection) => (
           <div
             key={collection.id}
-            className={`group p-2 rounded text-sm ${
+            className={`group p-2.5 rounded-lg text-sm transition-all ${
               selectedCollection === collection.id
-                ? "bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100"
+                ? "bg-blue-100 dark:bg-blue-900/40 text-blue-900 dark:text-blue-100 border-2 border-blue-500 dark:border-blue-400 shadow-md font-medium"
                 : collection.is_default
-                ? "bg-blue-50 dark:bg-blue-950 hover:bg-blue-100 dark:hover:bg-blue-900 text-gray-700 dark:text-gray-300 border border-blue-200 dark:border-blue-800"
-                : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                ? "bg-gray-100 dark:bg-gray-800/60 hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200 border border-gray-300 dark:border-gray-600 font-medium"
+                : "hover:bg-gray-100 dark:hover:bg-gray-800/60 text-gray-800 dark:text-gray-200 border border-transparent hover:border-gray-300 dark:hover:border-gray-600"
             }`}
           >
             <div className="flex items-center justify-between">
@@ -629,7 +635,7 @@ function CollectionManager() {
                 <div className="flex items-center gap-2">
                   <span>{collection.name}</span>
                   {collection.is_default && (
-                    <span className="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
+                    <span className="px-2 py-0.5 text-xs font-semibold bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200 rounded-md border border-blue-300 dark:border-blue-700">
                       Default
                     </span>
                   )}
@@ -638,6 +644,16 @@ function CollectionManager() {
                     permission={collection.permission}
                   />
                 </div>
+                {/* Live Collaborators Indicator */}
+                {collection.workspace_id && (
+                  <div className="mt-1">
+                    <LiveCollaborators
+                      entityType="collection"
+                      entityId={collection.id}
+                      entityName={collection.name}
+                    />
+                  </div>
+                )}
               </div>
             </div>
             {selectedCollection === collection.id && (
@@ -661,6 +677,24 @@ function CollectionManager() {
                   >
                     <History size={14} />
                     Versions
+                  </Button>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    onClick={() => setShowDocumentation(!showDocumentation)}
+                    className="flex items-center gap-1"
+                  >
+                    <FileCode size={14} />
+                    Documentation
+                  </Button>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    onClick={() => setShowTestRunner(!showTestRunner)}
+                    className="flex items-center gap-1"
+                  >
+                    <Play size={14} />
+                    Test Runner
                   </Button>
                   <Button
                     variant="link"
@@ -690,6 +724,13 @@ function CollectionManager() {
                       onClick={async () => {
                         try {
                           await setDefaultCollectionAPI(collection.id);
+                          // Update collections trong store để reflect is_default flag
+                          // Unset default của collection cũ và set default cho collection mới
+                          const updatedCollections = collections.map((c) => ({
+                            ...c,
+                            is_default: c.id === collection.id,
+                          }));
+                          setCollections(updatedCollections);
                           setDefaultCollectionId(collection.id);
                           triggerReload();
                           toast.success(`"${collection.name}" đã được set làm default collection`);
@@ -730,6 +771,16 @@ function CollectionManager() {
                       collectionId={collection.id}
                       onClose={() => setShowVersionHistory(false)}
                     />
+                  </div>
+                )}
+                {showDocumentation && (
+                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <CollectionDocumentation collectionId={collection.id} />
+                  </div>
+                )}
+                {showTestRunner && (
+                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <RequestTestRunner collectionId={collection.id} />
                   </div>
                 )}
               </div>

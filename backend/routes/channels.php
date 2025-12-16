@@ -73,3 +73,53 @@ Broadcast::channel('workspace.{workspaceId}', function ($user, $workspaceId) {
 
     return $member !== null;
 });
+
+// Private workspace channel for events
+Broadcast::channel('private-workspace.{workspaceId}', function ($user, $workspaceId) {
+    $workspace = \App\Models\Workspace::find($workspaceId);
+    
+    if (!$workspace) {
+        return false;
+    }
+
+    // Owner has access
+    if ($workspace->owner_id === $user->id) {
+        return ['id' => $user->id, 'name' => $user->name, 'email' => $user->email];
+    }
+
+    // Check if user is team member
+    $member = \App\Models\TeamMember::where('team_id', $workspaceId)
+        ->where('user_id', $user->id)
+        ->first();
+
+    if ($member) {
+        return ['id' => $user->id, 'name' => $user->name, 'email' => $user->email];
+    }
+
+    return false;
+});
+
+// Presence channel for workspace
+Broadcast::channel('presence-workspace.{workspaceId}', function ($user, $workspaceId) {
+    $workspace = \App\Models\Workspace::find($workspaceId);
+    
+    if (!$workspace) {
+        return false;
+    }
+
+    // Owner has access
+    if ($workspace->owner_id === $user->id) {
+        return ['id' => $user->id, 'name' => $user->name, 'email' => $user->email];
+    }
+
+    // Check if user is team member
+    $member = \App\Models\TeamMember::where('team_id', $workspaceId)
+        ->where('user_id', $user->id)
+        ->first();
+
+    if ($member) {
+        return ['id' => $user->id, 'name' => $user->name, 'email' => $user->email];
+    }
+
+    return false;
+});

@@ -43,9 +43,19 @@ Route::middleware('api')->group(function () {
         Route::get('/collections/default', [CollectionController::class, 'getDefault']);
         Route::post('/collections/{id}/set-default', [CollectionController::class, 'setDefault']);
         
+        // Collection Workspace Permissions
+        Route::get('/collections/{collectionId}/workspaces/{workspaceId}/permissions', [\App\Http\Controllers\CollectionWorkspacePermissionController::class, 'index']);
+        Route::put('/collections/{collectionId}/workspaces/{workspaceId}/permissions', [\App\Http\Controllers\CollectionWorkspacePermissionController::class, 'update']);
+        Route::put('/collections/{collectionId}/workspaces/{workspaceId}/permissions/{userId}', [\App\Http\Controllers\CollectionWorkspacePermissionController::class, 'setUserPermission']);
+        Route::delete('/collections/{collectionId}/workspaces/{workspaceId}/permissions/{userId}', [\App\Http\Controllers\CollectionWorkspacePermissionController::class, 'removeUserPermission']);
+        
         // Environments
         Route::apiResource('environments', EnvironmentController::class);
         Route::post('/environments/sync', [EnvironmentController::class, 'sync']);
+        
+        // Workspace Environments
+        Route::get('/workspaces/{workspaceId}/environments', [EnvironmentController::class, 'indexForWorkspace']);
+        Route::post('/workspaces/{workspaceId}/environments', [EnvironmentController::class, 'storeForWorkspace']);
         
         // Schemas
         Route::apiResource('schemas', SchemaController::class);
@@ -58,6 +68,84 @@ Route::middleware('api')->group(function () {
         Route::apiResource('workspaces', WorkspaceController::class);
         Route::post('/workspaces/{id}/invite', [WorkspaceController::class, 'invite']);
         Route::delete('/workspaces/{id}/members/{userId}', [WorkspaceController::class, 'removeMember']);
+        Route::get('/workspaces/{id}/analytics', [WorkspaceController::class, 'getAnalytics']);
+        Route::get('/workspaces/{id}/activities', [WorkspaceController::class, 'getActivities']);
+        Route::get('/workspaces/{id}/templates', [CollectionController::class, 'getWorkspaceTemplates']);
+        
+        // API Documentation
+        Route::get('/collections/{id}/documentation/preview', [\App\Http\Controllers\ApiDocumentationController::class, 'preview']);
+        Route::get('/collections/{id}/documentation', [\App\Http\Controllers\ApiDocumentationController::class, 'generate']);
+        Route::get('/workspaces/{id}/documentation', [\App\Http\Controllers\ApiDocumentationController::class, 'generateWorkspace']);
+        
+        // API Schemas
+        Route::get('/workspaces/{id}/schemas', [SchemaController::class, 'getWorkspaceSchemas']);
+        Route::post('/workspaces/{id}/schemas', [SchemaController::class, 'storeWorkspaceSchema']);
+        Route::post('/schemas/{id}/validate', [SchemaController::class, 'validateSchema']);
+        Route::post('/schemas/{id}/import-from-collection', [SchemaController::class, 'importFromCollection']);
+        
+        // API Versions
+        Route::get('/schemas/{id}/versions', [\App\Http\Controllers\ApiVersionController::class, 'index']);
+        Route::post('/schemas/{id}/versions', [\App\Http\Controllers\ApiVersionController::class, 'store']);
+        Route::get('/versions/{id}/diff', [\App\Http\Controllers\ApiVersionController::class, 'diff']);
+        Route::post('/versions/{id}/set-current', [\App\Http\Controllers\ApiVersionController::class, 'setCurrent']);
+        
+        // Mock Servers
+        Route::get('/workspaces/{id}/mock-servers', [\App\Http\Controllers\MockServerController::class, 'index']);
+        Route::post('/workspaces/{id}/mock-servers', [\App\Http\Controllers\MockServerController::class, 'store']);
+        Route::get('/mock-servers/{id}', [\App\Http\Controllers\MockServerController::class, 'show']);
+        Route::put('/mock-servers/{id}', [\App\Http\Controllers\MockServerController::class, 'update']);
+        Route::delete('/mock-servers/{id}', [\App\Http\Controllers\MockServerController::class, 'destroy']);
+        Route::post('/mock-servers/{id}/start', [\App\Http\Controllers\MockServerController::class, 'start']);
+        Route::post('/mock-servers/{id}/stop', [\App\Http\Controllers\MockServerController::class, 'stop']);
+        Route::get('/mock-servers/{id}/routes', [\App\Http\Controllers\MockServerController::class, 'getRoutes']);
+        
+        // API Test Suites
+        Route::get('/workspaces/{id}/test-suites', [\App\Http\Controllers\ApiTestController::class, 'index']);
+        Route::post('/workspaces/{id}/test-suites', [\App\Http\Controllers\ApiTestController::class, 'store']);
+        Route::get('/test-suites/{id}', [\App\Http\Controllers\ApiTestController::class, 'show']);
+        Route::put('/test-suites/{id}', [\App\Http\Controllers\ApiTestController::class, 'update']);
+        Route::delete('/test-suites/{id}', [\App\Http\Controllers\ApiTestController::class, 'destroy']);
+        Route::post('/test-suites/{id}/run', [\App\Http\Controllers\ApiTestController::class, 'run']);
+        Route::post('/test-suites/{id}/contract-test', [\App\Http\Controllers\ApiTestController::class, 'contractTest']);
+        
+        // API Templates
+        Route::get('/api-templates', [\App\Http\Controllers\ApiTemplateController::class, 'index']);
+        Route::get('/api-templates/{id}', [\App\Http\Controllers\ApiTemplateController::class, 'show']);
+        Route::post('/workspaces/{id}/schemas/from-template', [\App\Http\Controllers\ApiTemplateController::class, 'createFromTemplate']);
+        
+        // API Design Reviews
+        Route::post('/schemas/{id}/request-review', [\App\Http\Controllers\ApiDesignReviewController::class, 'requestReview']);
+        Route::get('/workspaces/{id}/design-reviews', [\App\Http\Controllers\ApiDesignReviewController::class, 'index']);
+        Route::post('/design-reviews/{id}/approve', [\App\Http\Controllers\ApiDesignReviewController::class, 'approve']);
+        Route::post('/design-reviews/{id}/reject', [\App\Http\Controllers\ApiDesignReviewController::class, 'reject']);
+        Route::post('/design-reviews/{id}/request-changes', [\App\Http\Controllers\ApiDesignReviewController::class, 'requestChanges']);
+        
+        // Tasks
+        Route::get('/workspaces/{id}/tasks', [\App\Http\Controllers\TaskController::class, 'index']);
+        Route::post('/workspaces/{id}/tasks', [\App\Http\Controllers\TaskController::class, 'store']);
+        Route::put('/tasks/{id}', [\App\Http\Controllers\TaskController::class, 'update']);
+        Route::delete('/tasks/{id}', [\App\Http\Controllers\TaskController::class, 'destroy']);
+        Route::post('/tasks/{id}/assign', [\App\Http\Controllers\TaskController::class, 'assign']);
+        Route::post('/tasks/{id}/complete', [\App\Http\Controllers\TaskController::class, 'complete']);
+        
+        // Discussions
+        Route::get('/workspaces/{id}/discussions', [\App\Http\Controllers\DiscussionController::class, 'index']);
+        Route::post('/workspaces/{id}/discussions', [\App\Http\Controllers\DiscussionController::class, 'store']);
+        Route::get('/discussions/{id}', [\App\Http\Controllers\DiscussionController::class, 'show']);
+        Route::put('/discussions/{id}', [\App\Http\Controllers\DiscussionController::class, 'update']);
+        Route::delete('/discussions/{id}', [\App\Http\Controllers\DiscussionController::class, 'destroy']);
+        Route::post('/discussions/{id}/replies', [\App\Http\Controllers\DiscussionController::class, 'addReply']);
+        Route::post('/discussions/{id}/resolve', [\App\Http\Controllers\DiscussionController::class, 'resolve']);
+        Route::post('/discussions/{id}/unresolve', [\App\Http\Controllers\DiscussionController::class, 'unresolve']);
+        
+        // Discussions
+        Route::get('/workspaces/{id}/discussions', [\App\Http\Controllers\DiscussionController::class, 'index']);
+        Route::post('/workspaces/{id}/discussions', [\App\Http\Controllers\DiscussionController::class, 'store']);
+        Route::get('/discussions/{id}', [\App\Http\Controllers\DiscussionController::class, 'show']);
+        Route::put('/discussions/{id}', [\App\Http\Controllers\DiscussionController::class, 'update']);
+        Route::delete('/discussions/{id}', [\App\Http\Controllers\DiscussionController::class, 'destroy']);
+        Route::post('/discussions/{id}/replies', [\App\Http\Controllers\DiscussionController::class, 'addReply']);
+        Route::post('/discussions/{id}/resolve', [\App\Http\Controllers\DiscussionController::class, 'resolve']);
         
         // Collection sharing
         Route::post('/collections/{id}/share', [CollectionController::class, 'share']);
@@ -81,6 +169,16 @@ Route::middleware('api')->group(function () {
         Route::post('/collections/{id}/versions', [CollectionController::class, 'createVersion']);
         Route::get('/collections/{id}/versions/{versionId}', [CollectionController::class, 'getVersion']);
         Route::post('/collections/{id}/restore/{versionId}', [CollectionController::class, 'restoreVersion']);
+        
+        // Request Reviews
+        Route::get('/collections/{collectionId}/reviews', [\App\Http\Controllers\RequestReviewController::class, 'index']);
+        Route::post('/requests/{requestId}/reviews', [\App\Http\Controllers\RequestReviewController::class, 'store']);
+        Route::put('/reviews/{id}', [\App\Http\Controllers\RequestReviewController::class, 'update']);
+        Route::post('/reviews/{id}/approve', [\App\Http\Controllers\RequestReviewController::class, 'approve']);
+        Route::post('/reviews/{id}/reject', [\App\Http\Controllers\RequestReviewController::class, 'reject']);
+        Route::post('/reviews/{id}/request-changes', [\App\Http\Controllers\RequestReviewController::class, 'requestChanges']);
+        Route::delete('/reviews/{id}', [\App\Http\Controllers\RequestReviewController::class, 'destroy']);
+        Route::get('/workspaces/{id}/reviews', [\App\Http\Controllers\RequestReviewController::class, 'getWorkspaceReviews']);
         
         // Templates
         Route::get('/templates', [\App\Http\Controllers\TemplateController::class, 'index']);

@@ -102,6 +102,7 @@ export async function saveRequest(
     try {
       const isAuthenticated = await authService.isAuthenticated();
       if (isAuthenticated) {
+        console.log('Syncing request to backend:', { collectionId, requestId: newRequest.id, name: newRequest.name });
         // Sync request với backend
         await addRequestToCollectionBackend(collectionId, {
           id: newRequest.id,
@@ -113,10 +114,15 @@ export async function saveRequest(
           queryParams: newRequest.queryParams,
           folderId: newRequest.folderId,
         });
+        console.log('Request synced to backend successfully');
+      } else {
+        console.log('User not authenticated, skipping backend sync');
       }
     } catch (error) {
       // Log error nhưng không throw - request đã được lưu local
       console.error('Failed to sync request to backend:', error);
+      // Re-throw để RequestBuilder có thể hiển thị lỗi
+      throw error;
     }
     
     return newRequest;

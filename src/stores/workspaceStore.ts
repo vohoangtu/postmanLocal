@@ -29,21 +29,32 @@ export interface Workspace {
 interface WorkspaceStore {
   workspaces: Workspace[];
   activeWorkspace: string | null;
+  currentWorkspace: Workspace | null;
   teamMembers: TeamMember[];
+  workspaceAnalytics: any | null;
+  workspaceActivities: any[];
   setWorkspaces: (workspaces: Workspace[]) => void;
   setActiveWorkspace: (id: string | null) => void;
+  setCurrentWorkspace: (workspace: Workspace | null) => void;
+  loadWorkspaces: () => Promise<void>;
+  loadWorkspace: (id: string) => Promise<Workspace | null>;
   addWorkspace: (workspace: Workspace) => void;
   updateWorkspace: (id: string, updates: Partial<Workspace>) => void;
   deleteWorkspace: (id: string) => void;
   inviteMember: (workspaceId: string, email: string, role: "admin" | "member" | "viewer") => Promise<void>;
   removeMember: (workspaceId: string, userId: string) => Promise<void>;
   setTeamMembers: (members: TeamMember[]) => void;
+  loadWorkspaceAnalytics: (workspaceId: string) => Promise<void>;
+  loadWorkspaceActivities: (workspaceId: string) => Promise<void>;
 }
 
 export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   workspaces: [],
   activeWorkspace: null,
+  currentWorkspace: null,
   teamMembers: [],
+  workspaceAnalytics: null,
+  workspaceActivities: [],
 
   setWorkspaces: (workspaces) => set({ workspaces }),
 
@@ -53,6 +64,69 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     const workspace = get().workspaces.find((w) => w.id === id);
     if (workspace?.team_members) {
       set({ teamMembers: workspace.team_members });
+    }
+  },
+
+  setCurrentWorkspace: (workspace) => set({ currentWorkspace: workspace }),
+
+  loadWorkspaces: async () => {
+    try {
+      const token = await authService.getAccessToken();
+      if (!token) return;
+
+      const response = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"}/workspaces`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        const workspaces = await response.json();
+        set({ workspaces });
+      }
+    } catch (error) {
+      console.error('Failed to load workspaces:', error);
+    }
+  },
+
+  loadWorkspace: async (id: string) => {
+    try {
+      const token = await authService.getAccessToken();
+      if (!token) return null;
+
+      const response = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"}/workspaces/${id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        const workspace = await response.json();
+        // Update store
+        set((state) => {
+          const existingIndex = state.workspaces.findIndex((w) => w.id === workspace.id);
+          const updatedWorkspaces = existingIndex >= 0
+            ? state.workspaces.map((w, i) => i === existingIndex ? workspace : w)
+            : [...state.workspaces, workspace];
+          
+          return {
+            workspaces: updatedWorkspaces,
+            currentWorkspace: workspace,
+            teamMembers: workspace.team_members || [],
+          };
+        });
+        return workspace;
+      }
+      return null;
+    } catch (error) {
+      console.error('Failed to load workspace:', error);
+      return null;
     }
   },
 
@@ -151,6 +225,52 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   },
 
   setTeamMembers: (members) => set({ teamMembers: members }),
+
+  loadWorkspaceAnalytics: async (workspaceId: string) => {
+    try {
+      const token = await authService.getAccessToken();
+      if (!token) return;
+
+      const response = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"}/workspaces/${workspaceId}/analytics`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        const analytics = await response.json();
+        set({ workspaceAnalytics: analytics });
+      }
+    } catch (error) {
+      console.error('Failed to load workspace analytics:', error);
+    }
+  },
+
+  loadWorkspaceActivities: async (workspaceId: string) => {
+    try {
+      const token = await authService.getAccessToken();
+      if (!token) return;
+
+      const response = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"}/workspaces/${workspaceId}/activities`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        set({ workspaceActivities: data.data || data });
+      }
+    } catch (error) {
+      console.error('Failed to load workspace activities:', error);
+    }
+  },
 }));
 
 

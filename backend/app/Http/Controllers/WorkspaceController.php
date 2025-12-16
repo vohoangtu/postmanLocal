@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Workspace;
 use App\Models\TeamMember;
 use App\Models\User;
+use App\Models\ActivityLog;
+use App\Events\WorkspaceActivity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -68,7 +70,12 @@ class WorkspaceController extends BaseController
         // Invalidate cache
         Cache::forget($this->getUserCacheKey('workspaces', Auth::id()));
 
-        return response()->json($workspace->load(['owner', 'teamMembers.user']), 201);
+        $workspace->load(['owner', 'teamMembers.user']);
+        
+        // Broadcast activity
+        event(new WorkspaceActivity($workspace->id, 'created', 'workspace', $workspace->id, $workspace->name));
+
+        return response()->json($workspace, 201);
     }
 
     /**
@@ -174,5 +181,67 @@ class WorkspaceController extends BaseController
         $member->delete();
 
         return response()->json(['message' => 'Member removed successfully']);
+    }
+
+    /**
+     * Get workspace analytics
+     */
+    public function getAnalytics(string $id)
+    {
+        $workspace = Workspace::where('owner_id', Auth::id())
+            ->orWhereHas('teamMembers', function ($query) {
+                $query->where('user_id', Auth::id());
+            })
+            ->with(['collections', 'teamMembers.user'])
+            ->findOrFail($id);
+
+        $collections = $workspace->collections;
+        $totalRequests = 0;
+        $collectionsByType = [];
+        
+        foreach ($collections as $collection) {
+            $data = is_string($collection->data) 
+                ? json_decode($collection->data, true) 
+                : $collection->data;
+            
+            $requests = $data['requests'] ?? [];
+            $totalRequests += count($requests);
+            
+            // Count by collection type if available
+            $type = $collection->is_shared ? 'shared' : 'private';
+            $collectionsByType[$type] = ($collectionsByType[$type] ?? 0) + 1;
+        }
+
+        $analytics = [
+            'workspace_id' => $workspace->id,
+            'workspace_name' => $workspace->name,
+            'total_collections' => $collections->count(),
+            'total_requests' => $totalRequests,
+            'team_members_count' => $workspace->teamMembers->count() + 1, // +1 for owner
+            'collections_by_type' => $collectionsByType,
+            'created_at' => $workspace->created_at,
+            'updated_at' => $workspace->updated_at,
+        ];
+
+        return response()->json($analytics);
+    }
+
+    /**
+     * Get workspace activities
+     */
+    public function getActivities(string $id)
+    {
+        $workspace = Workspace::where('owner_id', Auth::id())
+            ->orWhereHas('teamMembers', function ($query) {
+                $query->where('user_id', Auth::id());
+            })
+            ->findOrFail($id);
+
+        $activities = \App\Models\ActivityLog::where('workspace_id', $workspace->id)
+            ->with(['user', 'workspace'])
+            ->orderBy('created_at', 'desc')
+            ->paginate(50);
+
+        return response()->json($activities);
     }
 }

@@ -110,7 +110,7 @@ function MainApp() {
   return (
     <ErrorBoundary>
       <PanelManager>
-        <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
+        <div className="flex flex-col h-screen bg-white dark:bg-gray-900 overflow-hidden">
         <ToastContainer />
         <Suspense fallback={null}>
           <CommandPalette
@@ -134,17 +134,17 @@ function MainApp() {
             isAuthenticated={isAuthenticated}
           />
           {/* User menu bar */}
-          <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+          <div className="px-4 py-2 bg-white dark:bg-gray-800 border-t-2 border-gray-300 dark:border-gray-700 flex items-center justify-between shadow-md">
             {user ? (
               <>
                 <div className="flex items-center gap-4">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                  <span className="text-sm text-gray-800 dark:text-gray-200 font-medium">
                     {user.name} ({user.email})
                   </span>
                   {(user.role === 'admin' || user.role === 'super_admin') && (
                     <button
                       onClick={() => navigate('/admin/dashboard')}
-                      className="flex items-center gap-2 px-3 py-1 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded"
+                      className="flex items-center gap-2 px-3 py-1.5 text-sm text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-md font-medium border border-blue-300 dark:border-blue-700 shadow-sm"
                     >
                       <Shield size={16} />
                       Admin Panel
@@ -152,7 +152,7 @@ function MainApp() {
                   )}
                   <button
                     onClick={() => navigate('/user')}
-                    className="flex items-center gap-2 px-3 py-1 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                    className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md font-medium border border-gray-300 dark:border-gray-600"
                   >
                     <User size={16} />
                     Settings
@@ -160,7 +160,7 @@ function MainApp() {
                 </div>
                 <button
                   onClick={handleLogout}
-                  className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                  className="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md font-medium border border-gray-300 dark:border-gray-600"
                 >
                   Đăng xuất
                 </button>
@@ -187,13 +187,7 @@ function MainApp() {
           {/* Left Panel - hiển thị khi có view được chọn */}
           {isLeftPanelOpen && leftPanelView !== null && (
             <>
-              <div 
-                className={`hidden md:block transition-all duration-300 ease-in-out ${
-                  isLeftPanelOpen 
-                    ? 'w-[40%] min-w-[320px] opacity-100' 
-                    : 'w-0 opacity-0'
-                }`}
-              >
+              <div className="hidden md:block w-80 lg:w-96 flex-shrink-0">
                 <LeftPanel
                   view={leftPanelView}
                   isOpen={isLeftPanelOpen}
@@ -215,16 +209,10 @@ function MainApp() {
 
           {/* Divider giữa Left Panel và Main Content - chỉ hiển thị trên desktop */}
           {isLeftPanelOpen && leftPanelView !== null && (
-            <div className="hidden md:block w-px bg-gray-200 dark:bg-gray-700" />
+            <div className="hidden md:block w-px bg-gray-300 dark:bg-gray-700 flex-shrink-0" />
           )}
 
-          <div 
-            className={`flex-1 flex flex-col min-w-0 overflow-hidden transition-all duration-300 ease-in-out ${
-              isLeftPanelOpen && leftPanelView !== null 
-                ? 'md:w-[60%] w-full' 
-                : 'w-full'
-            }`}
-          >
+          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
             <TabBar />
             <div className="flex-1 flex overflow-hidden">
               <div className="flex-1 flex flex-col min-w-0 overflow-hidden">

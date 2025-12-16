@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { syncService } from "../../services/syncService";
 import { authService } from "../../services/authService";
@@ -12,9 +13,10 @@ import Card from "../UI/Card";
 import Badge from "../UI/Badge";
 import TeamMembersPanel from "./TeamMembersPanel";
 import InviteMemberModal from "./InviteMemberModal";
-import { Plus, Users, User, Trash2, FolderOpen } from "lucide-react";
+import { Plus, Users, User, Trash2, FolderOpen, ExternalLink } from "lucide-react";
 
 export default function WorkspaceManager() {
+  const navigate = useNavigate();
   const {
     workspaces,
     activeWorkspace,
@@ -199,28 +201,39 @@ export default function WorkspaceManager() {
             subtitle={currentWorkspace.description}
             footer={
               <div className="flex items-center justify-between">
-                {currentWorkspace.is_team && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowInviteModal(true)}
-                    className="flex items-center gap-1.5"
-                  >
-                    <Users size={14} />
-                    Invite Members
-                  </Button>
-                )}
-                {currentWorkspace.owner_id === localStorage.getItem("user_id") && (
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={() => handleDeleteWorkspace(currentWorkspace.id.toString())}
-                    className="flex items-center gap-1.5"
-                  >
-                    <Trash2 size={14} />
-                    Delete
-                  </Button>
-                )}
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => navigate(`/workspace/${currentWorkspace.id}`)}
+                  className="flex items-center gap-1.5"
+                >
+                  <ExternalLink size={14} />
+                  Open Workspace
+                </Button>
+                <div className="flex items-center gap-2">
+                  {currentWorkspace.is_team && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowInviteModal(true)}
+                      className="flex items-center gap-1.5"
+                    >
+                      <Users size={14} />
+                      Invite Members
+                    </Button>
+                  )}
+                  {currentWorkspace.owner_id === localStorage.getItem("user_id") && (
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => handleDeleteWorkspace(currentWorkspace.id.toString())}
+                      className="flex items-center gap-1.5"
+                    >
+                      <Trash2 size={14} />
+                      Delete
+                    </Button>
+                  )}
+                </div>
               </div>
             }
           >
@@ -234,7 +247,8 @@ export default function WorkspaceManager() {
                   {currentWorkspace.collections.slice(0, 5).map((collection: any) => (
                     <div
                       key={collection.id}
-                      className="p-2 bg-gray-50 dark:bg-gray-900/30 rounded text-sm text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700"
+                      className="p-2 bg-gray-50 dark:bg-gray-900/30 rounded text-sm text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      onClick={() => navigate(`/workspace/${currentWorkspace.id}`)}
                     >
                       {collection.name}
                     </div>

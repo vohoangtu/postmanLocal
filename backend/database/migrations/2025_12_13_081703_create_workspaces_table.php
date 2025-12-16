@@ -12,12 +12,14 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('workspaces', function (Blueprint $table) {
-            $table->id();
+            $table->uuid('id')->primary();
             $table->string('name');
             $table->text('description')->nullable();
-            $table->foreignId('owner_id')->constrained('users')->onDelete('cascade');
+            $table->uuid('owner_id');
             $table->boolean('is_team')->default(false);
             $table->timestamps();
+            
+            $table->foreign('owner_id')->references('id')->on('users')->onDelete('cascade');
         });
     }
 

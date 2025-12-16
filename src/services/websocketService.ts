@@ -116,9 +116,29 @@ class WebSocketService {
     this.channels.set(channelName, channel);
 
     return () => {
-      this.echo.leave(channelName);
+      if (this.echo) {
+        this.echo.leave(channelName);
+      }
       this.channels.delete(channelName);
     };
+  }
+
+  /**
+   * Broadcast user activity
+   */
+  broadcastActivity(workspaceId: string, activity: {
+    action: 'viewing' | 'editing' | 'idle';
+    entityType?: string;
+    entityId?: string;
+    entityName?: string;
+  }) {
+    if (!this.echo || !this.isConnected) {
+      return;
+    }
+
+    // This would typically be done via API call to backend
+    // Backend then broadcasts the event
+    // For now, we'll rely on the backend to handle this
   }
 
   /**

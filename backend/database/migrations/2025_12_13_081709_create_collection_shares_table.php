@@ -12,13 +12,16 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('collection_shares', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('collection_id')->constrained()->onDelete('cascade');
-            $table->foreignId('shared_with_user_id')->constrained('users')->onDelete('cascade');
+            $table->uuid('id')->primary();
+            $table->uuid('collection_id');
+            $table->uuid('shared_with_user_id');
             $table->enum('permission', ['read', 'write', 'admin'])->default('read');
-            $table->foreignId('shared_by_id')->constrained('users')->onDelete('cascade');
+            $table->uuid('shared_by_id');
             $table->timestamps();
             
+            $table->foreign('collection_id')->references('id')->on('collections')->onDelete('cascade');
+            $table->foreign('shared_with_user_id')->references('id')->on('users')->onDelete('cascade');
+            $table->foreign('shared_by_id')->references('id')->on('users')->onDelete('cascade');
             $table->unique(['collection_id', 'shared_with_user_id']);
         });
     }

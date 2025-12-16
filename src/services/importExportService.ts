@@ -4,6 +4,7 @@
  */
 
 import { useCollectionStore, Request, Collection } from "../stores/collectionStore";
+import { authService } from "./authService";
 
 // Postman Collection v2.1 format
 export interface PostmanCollection {
@@ -419,4 +420,242 @@ export function downloadFile(content: string, filename: string, mimeType: string
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Import collections vào workspace từ file
+ */
+export async function importCollectionsToWorkspace(
+  workspaceId: string,
+  file: File
+): Promise<{ collections: Collection[]; errors: string[] }> {
+  const token = await authService.getAccessToken();
+  if (!token) {
+    throw new Error('Chưa đăng nhập');
+  }
+
+  const fileContent = await file.text();
+  const errors: string[] = [];
+  const collections: Collection[] = [];
+
+  try {
+    let parsedData: any;
+    
+    // Detect format
+    if (file.name.endsWith('.json')) {
+      parsedData = JSON.parse(fileContent);
+    } else {
+      throw new Error('Unsupported file format. Please use JSON files.');
+    }
+
+    // Check if it's Postman collection format
+    if (parsedData.info && parsedData.item) {
+      const { collection, requests } = importPostmanCollection(parsedData);
+      
+      // Create collection in workspace via API
+      const response = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'}/collections`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            name: collection.name,
+            description: collection.description,
+            workspace_id: workspaceId,
+            data: { requests },
+          }),
+        }
+      );
+
+      if (response.ok) {
+        const createdCollection = await response.json();
+        collections.push({
+          id: createdCollection.id.toString(),
+          name: createdCollection.name,
+          description: createdCollection.description,
+          requests,
+          workspace_id: workspaceId,
+        });
+      } else {
+        const error = await response.json();
+        errors.push(`Failed to import "${collection.name}": ${error.message || 'Unknown error'}`);
+      }
+    } 
+    // Check if it's OpenAPI format
+    else if (parsedData.openapi || parsedData.swagger) {
+      const { collection, requests } = importOpenAPICollection(parsedData);
+      
+      const response = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'}/collections`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            name: collection.name,
+            description: collection.description,
+            workspace_id: workspaceId,
+            data: { requests },
+          }),
+        }
+      );
+
+      if (response.ok) {
+        const createdCollection = await response.json();
+        collections.push({
+          id: createdCollection.id.toString(),
+          name: createdCollection.name,
+          description: createdCollection.description,
+          requests,
+          workspace_id: workspaceId,
+        });
+      } else {
+        const error = await response.json();
+        errors.push(`Failed to import "${collection.name}": ${error.message || 'Unknown error'}`);
+      }
+    }
+    // Check if it's array of collections (bulk import)
+    else if (Array.isArray(parsedData)) {
+      for (const collectionData of parsedData) {
+        try {
+          const response = await fetch(
+            `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'}/collections`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                name: collectionData.name || 'Imported Collection',
+                description: collectionData.description,
+                workspace_id: workspaceId,
+                data: collectionData.data || { requests: collectionData.requests || [] },
+              }),
+            }
+          );
+
+          if (response.ok) {
+            const createdCollection = await response.json();
+            collections.push({
+              id: createdCollection.id.toString(),
+              name: createdCollection.name,
+              description: createdCollection.description,
+              requests: collectionData.requests || [],
+              workspace_id: workspaceId,
+            });
+          } else {
+            const error = await response.json();
+            errors.push(`Failed to import "${collectionData.name}": ${error.message || 'Unknown error'}`);
+          }
+        } catch (error: any) {
+          errors.push(`Error importing collection: ${error.message}`);
+        }
+      }
+    } else {
+      throw new Error('Unsupported file format');
+    }
+  } catch (error: any) {
+    errors.push(`Failed to parse file: ${error.message}`);
+  }
+
+  return { collections, errors };
+}
+
+/**
+ * Export collections từ workspace
+ */
+export async function exportWorkspaceCollections(
+  workspaceId: string,
+  format: 'postman' | 'openapi' | 'json' = 'json'
+): Promise<void> {
+  const token = await authService.getAccessToken();
+  if (!token) {
+    throw new Error('Chưa đăng nhập');
+  }
+
+  // Load collections from workspace
+  const response = await fetch(
+    `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'}/collections?workspace_id=${workspaceId}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error('Failed to load collections');
+  }
+
+  const collections = await response.json();
+  const collectionsList = Array.isArray(collections) ? collections : (collections.data || []);
+
+  if (collectionsList.length === 0) {
+    throw new Error('No collections found in workspace');
+  }
+
+  let content: string;
+  let filename: string;
+  let mimeType: string;
+
+  if (format === 'postman') {
+    // Export as Postman collection (combine all collections)
+    const postmanCollection = {
+      info: {
+        name: `Workspace Collections Export`,
+        description: `Exported from workspace`,
+        schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
+      },
+      item: collectionsList.flatMap((col: Collection) => {
+        const postman = exportToPostmanCollection({
+          id: col.id.toString(),
+          name: col.name,
+          description: col.description,
+          requests: col.requests || [],
+        });
+        return postman.item;
+      }),
+    };
+    content = JSON.stringify(postmanCollection, null, 2);
+    filename = `workspace-collections-${workspaceId}-${Date.now()}.json`;
+    mimeType = 'application/json';
+  } else if (format === 'openapi') {
+    // Export as OpenAPI (combine all collections)
+    const openApi = {
+      openapi: '3.0.0',
+      info: {
+        title: 'Workspace Collections',
+        description: 'Exported from workspace',
+        version: '1.0.0',
+      },
+      paths: {},
+    };
+
+    for (const col of collectionsList) {
+      const openApiCollection = exportToOpenAPI({
+        id: col.id.toString(),
+        name: col.name,
+        description: col.description,
+        requests: col.requests || [],
+      });
+      Object.assign(openApi.paths, openApiCollection.paths);
+    }
+
+    content = JSON.stringify(openApi, null, 2);
+    filename = `workspace-collections-${workspaceId}-${Date.now()}.json`;
+    mimeType = 'application/json';
+  } else {
+    // Export as JSON array
+    content = JSON.stringify(collectionsList, null, 2);
+    filename = `workspace-collections-${workspaceId}-${Date.now()}.json`;
+    mimeType = 'application/json';
+  }
+
+  downloadFile(content, filename, mimeType);
 }

@@ -3,11 +3,10 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Workspace extends Model
+class Workspace extends BaseModel
 {
     use HasFactory;
 
@@ -54,5 +53,13 @@ class Workspace extends Model
         $owner = $this->owner;
         $members = $this->teamMembers()->with('user')->get()->pluck('user');
         return collect([$owner])->merge($members)->unique('id');
+    }
+
+    /**
+     * Get collection workspace permissions
+     */
+    public function collectionWorkspacePermissions(): HasMany
+    {
+        return $this->hasMany(CollectionWorkspacePermission::class);
     }
 }

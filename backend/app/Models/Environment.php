@@ -3,15 +3,15 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Crypt;
 
-class Environment extends Model
+class Environment extends BaseModel
 {
     use HasFactory;
 
     protected $fillable = [
         'user_id',
+        'workspace_id',
         'name',
         'variables',
     ];
@@ -85,6 +85,24 @@ class Environment extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function workspace()
+    {
+        return $this->belongsTo(Workspace::class);
+    }
+
+    /**
+     * Scope để query environments theo workspace hoặc user
+     */
+    public function scopeForWorkspace($query, $workspaceId)
+    {
+        return $query->where('workspace_id', $workspaceId);
+    }
+
+    public function scopeForUser($query, $userId)
+    {
+        return $query->where('user_id', $userId)->whereNull('workspace_id');
     }
 }
 

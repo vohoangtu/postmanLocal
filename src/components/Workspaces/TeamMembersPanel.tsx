@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useWorkspaceStore, TeamMember } from "../../stores/workspaceStore";
 import { useToast } from "../../hooks/useToast";
+import { authService } from "../../services/authService";
 import Button from "../UI/Button";
 
 interface TeamMembersPanelProps {

@@ -27,11 +27,11 @@ export default function Button({
   const baseClasses = 'inline-flex items-center justify-center font-medium rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed';
   
   const variantClasses = {
-    primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500 dark:bg-blue-500 dark:hover:bg-blue-600',
-    secondary: 'bg-gray-200 text-gray-700 hover:bg-gray-300 focus:ring-gray-500 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600',
-    danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 dark:bg-red-500 dark:hover:bg-red-600',
-    ghost: 'bg-transparent text-gray-700 hover:bg-gray-100 focus:ring-gray-500 dark:text-gray-300 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600',
-    link: 'bg-transparent text-blue-600 hover:text-blue-700 hover:underline focus:ring-blue-500 dark:text-blue-400 dark:hover:text-blue-300 p-0',
+    primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500 dark:bg-blue-500 dark:hover:bg-blue-600 shadow-md hover:shadow-lg',
+    secondary: 'bg-gray-300 text-gray-800 hover:bg-gray-400 focus:ring-gray-500 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 border border-gray-400 dark:border-gray-600 shadow-sm',
+    danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 dark:bg-red-500 dark:hover:bg-red-600 shadow-md hover:shadow-lg',
+    ghost: 'bg-transparent text-gray-800 hover:bg-gray-200 focus:ring-gray-500 dark:text-gray-200 dark:hover:bg-gray-700 border-2 border-gray-400 dark:border-gray-600',
+    link: 'bg-transparent text-blue-700 hover:text-blue-800 hover:underline focus:ring-blue-500 dark:text-blue-400 dark:hover:text-blue-300 p-0 font-semibold',
   };
   
   const sizeClasses = {

@@ -12,7 +12,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('collections', function (Blueprint $table) {
-            $table->foreignId('workspace_id')->nullable()->after('user_id')->constrained()->onDelete('cascade');
+            $table->uuid('workspace_id')->nullable()->after('user_id');
+            $table->foreign('workspace_id')->references('id')->on('workspaces')->onDelete('cascade');
         });
     }
 

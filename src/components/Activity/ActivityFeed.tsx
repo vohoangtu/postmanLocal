@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useActivityStore, ActivityLog } from "../../stores/activityStore";
+import { authService } from "../../services/authService";
 import { Clock, User, Folder, FileText } from "lucide-react";
 import Button from "../UI/Button";
 
@@ -20,7 +21,7 @@ export default function ActivityFeed({ workspaceId, collectionId }: ActivityFeed
   const loadActivities = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem("auth_token");
+      const token = await authService.getAccessToken();
       if (!token) return;
 
       let url = `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"}/activities`;

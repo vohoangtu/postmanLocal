@@ -3,9 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
 
-class Collection extends Model
+class Collection extends BaseModel
 {
     use HasFactory;
 
@@ -57,9 +56,17 @@ class Collection extends Model
     }
 
     /**
+     * Get workspace permissions for this collection
+     */
+    public function workspacePermissions()
+    {
+        return $this->hasMany(CollectionWorkspacePermission::class);
+    }
+
+    /**
      * Lấy default collection của user
      */
-    public static function getDefaultCollection(int $userId): ?self
+    public static function getDefaultCollection(string $userId): ?self
     {
         return self::where('user_id', $userId)
             ->where('is_default', true)

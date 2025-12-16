@@ -17,29 +17,39 @@ import Tooltip from "../UI/Tooltip";
 import { useCollectionStore } from "../../stores/collectionStore";
 import { useAuth } from "../../contexts/AuthContext";
 import { saveRequest } from "../../services/storageService";
+import { websocketService } from "../../services/websocketService";
 import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts";
-import { Code2, Network, MessageSquare, StickyNote, X, Send, Save, Settings } from "lucide-react";
+import { Code2, Network, MessageSquare, StickyNote, X, Send, Save, Settings, CheckCircle2 } from "lucide-react";
 import CommentsPanel from "../Comments/CommentsPanel";
 import AnnotationEditor from "../Annotations/AnnotationEditor";
+import RequestReviewPanel from "./RequestReviewPanel";
+import RequestValidator from "./RequestValidator";
+import ConflictResolver from "./ConflictResolver";
+import SharedEditingIndicator from "../Workspaces/SharedEditingIndicator";
 import ComponentErrorBoundary from "../Error/ComponentErrorBoundary";
 import { useFeatureGate } from "../../hooks/useFeatureGate";
 import FeatureLockedMessage from "../FeatureGate/FeatureLockedMessage";
+import SkeletonLoader from "../UI/SkeletonLoader";
+import ErrorMessage from "../Error/ErrorMessage";
+import ErrorRetry from "../Error/ErrorRetry";
 
 interface RequestBuilderProps {
   requestId: string | null;
   onResponse: (response: any) => void;
   tabId?: string;
+  onSaveSuccess?: () => void;
 }
 
-export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProps) {
+export default function RequestBuilder({ onResponse, tabId, onSaveSuccess }: RequestBuilderProps) {
   const { addToHistory } = useRequestHistoryStore();
   const { getTab, updateTab, closeTab } = useTabStore();
-  const { addRequestToCollection, triggerReload, defaultCollectionId } = useCollectionStore();
-  const { isAuthenticated } = useAuth();
+  const { addRequestToCollection, triggerReload, defaultCollectionId, collections } = useCollectionStore();
+  const { isAuthenticated, user } = useAuth();
   const toast = useToast();
   const [requestStatus, setRequestStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingTab, setIsLoadingTab] = useState(false);
   const tab = tabId ? getTab(tabId) : null;
   
   const [method, setMethod] = useState(tab?.method || "GET");
@@ -61,11 +71,60 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
   const { activeCollaborationTab, setActiveCollaborationTab } = usePanelStore();
   const [savedRequestId, setSavedRequestId] = useState<string | null>(null);
   const [savedCollectionId, setSavedCollectionId] = useState<string | null>(null);
-  const { replaceVariables, activeEnvironment, environments, setActiveEnvironment } = useEnvironmentStore();
+  const [conflicts, setConflicts] = useState<any[]>([]);
+  const [isLocked, setIsLocked] = useState(false);
+  const { replaceVariables, activeEnvironment, environments, workspaceEnvironments, workspaceId, setActiveEnvironment } = useEnvironmentStore();
   
   // Feature gates
   const graphqlGate = useFeatureGate("graphql");
   const websocketGate = useFeatureGate("websocket");
+
+  // Listen for request updates và conflicts
+  useEffect(() => {
+    if (!savedRequestId || !savedCollectionId || !user) return;
+
+    const collection = collections.find((c) => c.id === savedCollectionId);
+    const workspaceId = collection?.workspace_id;
+
+    if (!workspaceId) return;
+
+    const { websocketService } = require('../../services/websocketService');
+    const unsubscribe = websocketService.subscribe(
+      `private-workspace.${workspaceId}`,
+      'request.updated',
+      (data: any) => {
+        // Check if this is an update to our current request
+        if (data.request_id === savedRequestId && data.user_id !== user?.id) {
+          // Detect conflicts
+          const currentRequest = collection?.requests?.find((r: any) => r.id === savedRequestId);
+          if (currentRequest && data.changes) {
+            const detectedConflicts: any[] = [];
+            
+            // Check for conflicts in different fields
+            Object.entries(data.changes).forEach(([field, incomingValue]: [string, any]) => {
+              const currentValue = currentRequest[field];
+              if (currentValue !== incomingValue) {
+                detectedConflicts.push({
+                  field,
+                  currentValue: currentValue || '',
+                  incomingValue: incomingValue || '',
+                  timestamp: data.timestamp,
+                  user: data.user,
+                });
+              }
+            });
+
+            if (detectedConflicts.length > 0) {
+              setConflicts(detectedConflicts);
+              setIsLocked(true);
+            }
+          }
+        }
+      }
+    );
+
+    return unsubscribe;
+  }, [savedRequestId, savedCollectionId, collections, user]);
   
   const handleRequestTypeChange = (type: "rest" | "graphql" | "websocket") => {
     if (type === "graphql" && !graphqlGate.allowed) {
@@ -101,52 +160,82 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
       return;
     }
 
-    const currentTab = getTab(tabId);
-    if (!currentTab) {
-      return;
-    }
+    // Hàm load data từ tab với retry logic
+    const loadTabData = (retryCount = 0) => {
+      const currentTab = getTab(tabId);
+      if (!currentTab) {
+        // Nếu đây là lần đầu (retryCount = 0), set default values ngay lập tức
+        // để form hiển thị ngay, sau đó retry để load data từ tab
+        if (retryCount === 0) {
+          setIsLoadingTab(true);
+          isInitialLoad.current = true;
+          setMethod("GET");
+          setUrl("");
+          setHeaders([{ key: "", value: "" }]);
+          setBody("");
+          setQueryParams([{ key: "", value: "", enabled: true }]);
+          setTimeout(() => {
+            isInitialLoad.current = false;
+            setIsLoadingTab(false);
+          }, 0);
+        }
+        
+        // Retry tối đa 5 lần nếu tab chưa có
+        if (retryCount < 5) {
+          setTimeout(() => loadTabData(retryCount + 1), 100);
+        } else {
+          setIsLoadingTab(false);
+        }
+        return;
+      }
 
-    // Set flag để skip update trong lần đầu
-    isInitialLoad.current = true;
+      setIsLoadingTab(true);
 
-    // Deep copy để tránh reference sharing và đảm bảo data được load đúng
-    setMethod(currentTab.method || "GET");
-    setUrl(currentTab.url || "");
-    
-    // Deep copy headers
-    const headersCopy = currentTab.requestData?.headers && Array.isArray(currentTab.requestData.headers)
-      ? currentTab.requestData.headers.map((h: any) => ({ 
-          key: String(h.key || ''), 
-          value: String(h.value || '') 
-        }))
-      : [{ key: "", value: "" }];
-    setHeaders(headersCopy);
-    
-    // Deep copy body
-    setBody(currentTab.requestData?.body ? String(currentTab.requestData.body) : "");
-    
-    // Deep copy queryParams
-    if (currentTab.requestData?.queryParams && Array.isArray(currentTab.requestData.queryParams)) {
-      const queryParamsCopy = currentTab.requestData.queryParams.map((qp: any) => ({
-        key: String(qp.key || ''),
-        value: String(qp.value || ''),
-        enabled: qp.enabled !== undefined ? Boolean(qp.enabled) : true,
-      }));
-      setQueryParams(queryParamsCopy);
-    } else {
-      setQueryParams([{ key: "", value: "", enabled: true }]);
-    }
+      // Set flag để skip update trong lần đầu
+      isInitialLoad.current = true;
 
-    // Reset các state khác khi chuyển tab
-    setRequestStatus("idle");
-    setShowSaveModal(false);
-    setSavedRequestId(null);
-    setSavedCollectionId(null);
+      // Deep copy để tránh reference sharing và đảm bảo data được load đúng
+      setMethod(currentTab.method || "GET");
+      setUrl(currentTab.url || "");
+      
+      // Deep copy headers
+      const headersCopy = currentTab.requestData?.headers && Array.isArray(currentTab.requestData.headers)
+        ? currentTab.requestData.headers.map((h: any) => ({ 
+            key: String(h.key || ''), 
+            value: String(h.value || '') 
+          }))
+        : [{ key: "", value: "" }];
+      setHeaders(headersCopy);
+      
+      // Deep copy body
+      setBody(currentTab.requestData?.body ? String(currentTab.requestData.body) : "");
+      
+      // Deep copy queryParams
+      if (currentTab.requestData?.queryParams && Array.isArray(currentTab.requestData.queryParams)) {
+        const queryParamsCopy = currentTab.requestData.queryParams.map((qp: any) => ({
+          key: String(qp.key || ''),
+          value: String(qp.value || ''),
+          enabled: qp.enabled !== undefined ? Boolean(qp.enabled) : true,
+        }));
+        setQueryParams(queryParamsCopy);
+      } else {
+        setQueryParams([{ key: "", value: "", enabled: true }]);
+      }
 
-    // Reset flag sau một tick để cho phép update tiếp theo
-    setTimeout(() => {
-      isInitialLoad.current = false;
-    }, 0);
+      // Reset các state khác khi chuyển tab
+      setRequestStatus("idle");
+      setShowSaveModal(false);
+      setSavedRequestId(null);
+      setSavedCollectionId(null);
+
+      // Reset flag sau một tick để cho phép update tiếp theo
+      setTimeout(() => {
+        isInitialLoad.current = false;
+        setIsLoadingTab(false);
+      }, 0);
+    };
+
+    loadTabData();
   }, [tabId, getTab]);
 
   // Keyboard shortcuts
@@ -364,7 +453,8 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
       }
 
       setRequestStatus("error");
-      toast.error(errorResponse.error || "Request failed");
+      const errorMsg = errorResponse.error || "Request failed";
+      toast.error(errorMsg);
       onResponse(errorResponse);
     }
   };
@@ -454,6 +544,11 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
       }
 
       toast.success(`Request "${requestName}" đã được lưu vào collection${isAuthenticated ? ' và đồng bộ với server' : ''}`);
+      
+      // Gọi callback nếu có
+      if (onSaveSuccess) {
+        onSaveSuccess();
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Không thể lưu request");
     } finally {
@@ -655,10 +750,21 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
     );
   }
 
+  // Hiển thị skeleton loader khi đang load tab data
+  if (isLoadingTab && tabId) {
+    return (
+      <div className="flex-1 flex flex-col bg-white dark:bg-gray-800">
+        <div className="p-3 border-b-2 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-md">
+          <SkeletonLoader type="request-builder" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col bg-white dark:bg-gray-800">
       {/* Header với close button */}
-      <div className="p-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+      <div className="p-3 border-b-2 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-md">
         <div className="flex items-center justify-between gap-3">
           {/* Request Type Selector */}
           <div className="flex items-center gap-2">
@@ -702,7 +808,7 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
             <select
               value={method}
               onChange={(e) => setMethod(e.target.value)}
-              className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="px-3 py-1.5 text-sm border-2 border-gray-400 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-semibold focus:ring-2 focus:ring-blue-500 focus:border-blue-600 shadow-sm"
             >
               <option>GET</option>
               <option>POST</option>
@@ -719,10 +825,16 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
               onChange={(e) => setActiveEnvironment(e.target.value || null)}
               options={[
                 { value: "", label: "No Environment" },
-                ...environments.map((env) => ({
-                  value: env.id,
-                  label: env.name,
-                })),
+                // Ưu tiên workspace environments nếu có
+                ...(workspaceId && workspaceEnvironments.length > 0
+                  ? workspaceEnvironments.map((env) => ({
+                      value: env.id,
+                      label: env.name,
+                    }))
+                  : environments.map((env) => ({
+                      value: env.id,
+                      label: env.name,
+                    }))),
               ]}
               className="w-48"
             />
@@ -733,13 +845,20 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="Enter request URL or paste from clipboard"
-              className="flex-1 min-w-[300px] px-4 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="flex-1 min-w-[300px] px-4 py-1.5 text-sm border-2 border-gray-400 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-600 shadow-sm"
             />
           </div>
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2">
             <RequestStatus status={requestStatus} />
+            {requestStatus === "error" && (
+              <ErrorRetry
+                onRetry={handleSend}
+                variant="inline"
+                className="mr-2"
+              />
+            )}
             <Tooltip content="Send request (Ctrl+Enter)">
               <Button
                 variant="primary"
@@ -783,13 +902,13 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
           </div>
         </div>
         {/* Auth Section */}
-        <div className="flex items-center gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex items-center gap-2 pt-2 border-t-2 border-gray-300 dark:border-gray-700">
           <button
             onClick={() => setShowAuth(!showAuth)}
-            className={`text-xs px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 ${
+            className={`text-xs px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 font-medium ${
               auth
-                ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800"
-                : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600"
+                ? "bg-green-200 dark:bg-green-900/40 text-green-800 dark:text-green-200 border-2 border-green-500 dark:border-green-600 shadow-sm"
+                : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-2 border-gray-400 dark:border-gray-600 hover:bg-gray-300 dark:hover:bg-gray-600"
             }`}
           >
             <Settings size={12} />
@@ -808,11 +927,41 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600">
+      {/* Shared Editing Indicator */}
+      {savedRequestId && savedCollectionId && (
+        <div className="px-4 pt-4">
+          <SharedEditingIndicator
+            entityType="request"
+            entityId={savedRequestId}
+            entityName={tab?.name || 'Request'}
+          />
+        </div>
+      )}
+
+      {/* Conflict Resolver */}
+      {conflicts.length > 0 && (
+        <div className="px-4 pt-4">
+          <ConflictResolver
+            conflicts={conflicts}
+            onResolve={(resolutions) => {
+              // Apply resolutions
+              Object.entries(resolutions).forEach(([field, value]) => {
+                if (field === 'url') setUrl(value);
+                else if (field === 'body') setBody(value);
+                // Add more field mappings as needed
+              });
+              setConflicts([]);
+            }}
+            onCancel={() => setConflicts([])}
+          />
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-gray-900/30 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600">
         {/* Query Parameters Section */}
-        <div className="bg-gray-50 dark:bg-gray-900/30 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border-2 border-gray-300 dark:border-gray-700 shadow-sm">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
               Query Parameters
               <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
                 ({queryParams.filter((p) => p.key && p.enabled).length} active)
@@ -867,10 +1016,21 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
           </div>
         </div>
 
+        {/* Request Validator */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border-2 border-gray-300 dark:border-gray-700 shadow-sm">
+          <RequestValidator
+            method={method}
+            url={buildUrl()}
+            headers={headers}
+            body={buildBody()}
+            queryParams={queryParams}
+          />
+        </div>
+
         {/* Headers Section */}
-        <div className="bg-gray-50 dark:bg-gray-900/30 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border-2 border-gray-300 dark:border-gray-700 shadow-sm">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
               Headers
               <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
                 ({headers.filter((h) => h.key).length} set)
@@ -893,14 +1053,14 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
                   value={header.key}
                   onChange={(e) => updateHeader(index, "key", e.target.value)}
                   placeholder="Header name (e.g., Content-Type)"
-                  className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="flex-1 px-3 py-1.5 text-sm border-2 border-gray-400 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-600 shadow-sm"
                 />
                 <input
                   type="text"
                   value={header.value}
                   onChange={(e) => updateHeader(index, "value", e.target.value)}
                   placeholder="Header value"
-                  className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="flex-1 px-3 py-1.5 text-sm border-2 border-gray-400 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-600 shadow-sm"
                 />
                 <Button
                   variant="ghost"
@@ -920,9 +1080,9 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
 
         {/* Body Section */}
         {(method === "POST" || method === "PUT" || method === "PATCH") && (
-          <div className="bg-gray-50 dark:bg-gray-900/30 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border-2 border-gray-300 dark:border-gray-700 shadow-sm">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Request Body</h3>
+              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Request Body</h3>
               <select
                 value={bodyType}
                 onChange={(e) => setBodyType(e.target.value as any)}
@@ -939,7 +1099,7 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 placeholder="Request body (JSON, XML, etc.)"
-                className="w-full h-48 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
+                className="w-full h-48 px-3 py-2 border-2 border-gray-400 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-600 resize-y shadow-sm"
               />
             )}
             {(bodyType === "form-data" || bodyType === "x-www-form-urlencoded") && (
@@ -951,14 +1111,14 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
                       value={item.key}
                       onChange={(e) => updateFormData(index, "key", e.target.value)}
                       placeholder="Field name"
-                      className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="flex-1 px-3 py-1.5 text-sm border-2 border-gray-400 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-600 shadow-sm"
                     />
                     <input
                       type="text"
                       value={item.value}
                       onChange={(e) => updateFormData(index, "value", e.target.value)}
                       placeholder="Field value"
-                      className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="flex-1 px-3 py-1.5 text-sm border-2 border-gray-400 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-600 shadow-sm"
                     />
                     <Button
                       variant="ghost"
@@ -1008,6 +1168,15 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
                   Annotations
                 </TabButton>
               )}
+              {savedRequestId && savedCollectionId && collections.find((c) => c.id === savedCollectionId)?.workspace_id && (
+                <TabButton
+                  active={activeCollaborationTab === "reviews"}
+                  onClick={() => setActiveCollaborationTab(activeCollaborationTab === "reviews" ? null : "reviews")}
+                  icon={CheckCircle2}
+                >
+                  Reviews
+                </TabButton>
+              )}
             </div>
             {activeCollaborationTab === "comments" && savedCollectionId && (
               <div className="p-4 max-h-64 overflow-y-auto">
@@ -1020,6 +1189,17 @@ export default function RequestBuilder({ onResponse, tabId }: RequestBuilderProp
               <div className="p-4 max-h-64 overflow-y-auto">
                 <ComponentErrorBoundary componentName="Annotations Panel">
                   <AnnotationEditor requestId={savedRequestId} />
+                </ComponentErrorBoundary>
+              </div>
+            )}
+            {activeCollaborationTab === "reviews" && savedRequestId && savedCollectionId && (
+              <div className="p-4 max-h-64 overflow-y-auto">
+                <ComponentErrorBoundary componentName="Review Panel">
+                  <RequestReviewPanel
+                    requestId={savedRequestId}
+                    collectionId={savedCollectionId}
+                    workspaceId={collections.find((c) => c.id === savedCollectionId)?.workspace_id}
+                  />
                 </ComponentErrorBoundary>
               </div>
             )}

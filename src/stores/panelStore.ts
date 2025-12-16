@@ -24,7 +24,7 @@ interface PanelState {
   isCommandPaletteOpen: boolean;
   
   // Collaboration panel state
-  activeCollaborationTab: "comments" | "annotations" | null;
+  activeCollaborationTab: "comments" | "annotations" | "reviews" | null;
   
   // Panel stacking order (z-index management)
   panelStack: string[];
@@ -35,7 +35,7 @@ interface PanelState {
   closeLeftPanel: () => void;
   setActiveViewTab: (tab: "response" | "tests") => void;
   setCommandPaletteOpen: (open: boolean) => void;
-  setActiveCollaborationTab: (tab: "comments" | "annotations" | null) => void;
+  setActiveCollaborationTab: (tab: "comments" | "annotations" | "reviews" | null) => void;
   closeAllPanels: () => void;
   
   // Helper để check panel nào đang active

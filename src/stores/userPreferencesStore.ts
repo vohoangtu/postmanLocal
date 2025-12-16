@@ -31,7 +31,7 @@ interface UserPreferencesStore {
 
 export const useUserPreferencesStore = create<UserPreferencesStore>((set, get) => ({
   preferences: {
-    theme: 'auto',
+    theme: 'light', // Mặc định light theme
     language: 'vi',
     notifications: {
       email: true,

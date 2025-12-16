@@ -9,15 +9,19 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('comments', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('collection_id')->nullable()->constrained()->onDelete('cascade');
+            $table->uuid('id')->primary();
+            $table->uuid('collection_id')->nullable();
             // request_id không có foreign key vì bảng requests không tồn tại
             // Requests được lưu trong JSON data của collection
-            $table->unsignedBigInteger('request_id')->nullable();
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->string('request_id')->nullable();
+            $table->uuid('user_id');
             $table->text('content');
-            $table->foreignId('parent_id')->nullable()->constrained('comments')->onDelete('cascade');
+            $table->uuid('parent_id')->nullable();
             $table->timestamps();
+            
+            $table->foreign('collection_id')->references('id')->on('collections')->onDelete('cascade');
+            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
+            $table->foreign('parent_id')->references('id')->on('comments')->onDelete('cascade');
         });
     }
 
