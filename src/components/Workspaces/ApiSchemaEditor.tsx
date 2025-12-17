@@ -393,7 +393,7 @@ export default function ApiSchemaEditor() {
                   value={schemaDescription}
                   onChange={(e) => setSchemaDescription(e.target.value)}
                   placeholder="API description"
-                  className="w-full px-3 py-2 border-2 border-gray-400 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-600"
+                  className="w-full px-3 py-2 border border-gray-400 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-600"
                   rows={3}
                   disabled={!permissions.canEdit}
                 />
@@ -496,7 +496,7 @@ export default function ApiSchemaEditor() {
                   value={schemaDescription}
                   onChange={(e) => setSchemaDescription(e.target.value)}
                   placeholder="API description"
-                  className="w-full px-3 py-2 border-2 border-gray-400 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  className="w-full px-3 py-2 border border-gray-400 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   rows={3}
                 />
               </div>

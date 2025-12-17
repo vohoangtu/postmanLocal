@@ -92,7 +92,7 @@ export default function SchemaEditor({ onSchemaSelect }: SchemaEditorProps) {
         </div>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex min-w-0">
         <div className="w-64 border-r border-gray-200 dark:border-gray-700 overflow-y-auto p-4">
           <div className="space-y-2">
             {schemas.map((schema) => (
@@ -114,7 +114,7 @@ export default function SchemaEditor({ onSchemaSelect }: SchemaEditorProps) {
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0">
           {editingSchema ? (
             <>
               <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">

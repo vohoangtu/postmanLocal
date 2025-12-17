@@ -6,36 +6,13 @@
 import { create } from 'zustand';
 import { authService } from '../services/authService';
 
-export interface RequestReview {
-  id: string;
-  request_id: string;
-  collection_id: string;
-  workspace_id: string;
-  reviewer_id: string;
-  status: 'pending' | 'approved' | 'rejected' | 'changes_requested';
-  comments?: string;
-  reviewed_at?: string;
-  reviewer?: {
-    id: string;
-    name: string;
-    email: string;
-  };
-  collection?: {
-    id: string;
-    name: string;
-  };
-  workspace?: {
-    id: string;
-    name: string;
-  };
-}
+import type { RequestReview } from '../types/workspace';
 
 interface RequestReviewStore {
   reviews: RequestReview[];
   loading: boolean;
   loadReviews: (collectionId: string, filters?: { status?: string; reviewer_id?: string; request_id?: string }) => Promise<void>;
-  loadWorkspaceReviews: (workspaceId: string, filters?: { status?: string; reviewer_id?: string }) => Promise<void>;
-  createReview: (requestId: string, collectionId: string, workspaceId: string, reviewerId: string, comments?: string) => Promise<RequestReview>;
+  createReview: (requestId: string, collectionId: string, reviewerId: string, comments?: string) => Promise<RequestReview>;
   updateReview: (reviewId: string, status: string, comments?: string) => Promise<void>;
   approveReview: (reviewId: string) => Promise<void>;
   rejectReview: (reviewId: string, comments?: string) => Promise<void>;
@@ -82,38 +59,7 @@ export const useRequestReviewStore = create<RequestReviewStore>((set, get) => ({
     }
   },
 
-  loadWorkspaceReviews: async (workspaceId, filters = {}) => {
-    set({ loading: true });
-    try {
-      const token = await authService.getAccessToken();
-      if (!token) throw new Error('Chưa đăng nhập');
-
-      const params = new URLSearchParams();
-      if (filters.status) params.append('status', filters.status);
-      if (filters.reviewer_id) params.append('reviewer_id', filters.reviewer_id);
-
-      const response = await fetch(
-        `${API_BASE_URL}/workspaces/${workspaceId}/reviews?${params.toString()}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        const reviewsList = Array.isArray(data) ? data : (data.data || []);
-        set({ reviews: reviewsList });
-      }
-    } catch (error) {
-      console.error('Failed to load workspace reviews:', error);
-    } finally {
-      set({ loading: false });
-    }
-  },
-
-  createReview: async (requestId, collectionId, workspaceId, reviewerId, comments) => {
+  createReview: async (requestId, collectionId, reviewerId, comments) => {
     try {
       const token = await authService.getAccessToken();
       if (!token) throw new Error('Chưa đăng nhập');
@@ -126,7 +72,6 @@ export const useRequestReviewStore = create<RequestReviewStore>((set, get) => ({
         },
         body: JSON.stringify({
           collection_id: collectionId,
-          workspace_id: workspaceId,
           reviewer_id: reviewerId,
           comments,
         }),

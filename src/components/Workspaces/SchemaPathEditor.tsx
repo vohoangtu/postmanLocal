@@ -157,7 +157,7 @@ export default function SchemaPathEditor({ path, operations, onUpdate, onDelete 
         {Object.entries(operations).map(([method, operation]) => (
           <div
             key={method}
-            className="border-2 border-gray-200 dark:border-gray-700 rounded-lg p-3"
+            className="border border-gray-200 dark:border-gray-700 rounded-lg p-3"
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -193,7 +193,7 @@ export default function SchemaPathEditor({ path, operations, onUpdate, onDelete 
                   value={operation.description || ''}
                   onChange={(e) => handleUpdateOperation(method, { description: e.target.value })}
                   placeholder="Operation description"
-                  className="w-full px-2 py-1 border-2 border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   rows={2}
                 />
               </div>

@@ -1,27 +1,10 @@
 /**
- * Left Panel - Hiển thị Collections, History, Templates, etc.
- * Có thể toggle mở/đóng
+ * LeftPanel Component (Backward Compatibility)
+ * Re-export PublicLeftPanel để giữ backward compatibility
+ * Sử dụng PublicLeftPanel cho public usage, WorkspaceLeftPanel cho workspace context
  */
 
-import { useState, useEffect } from "react";
-import { X } from "lucide-react";
-import CollectionManager from "../Collections/CollectionManager";
-import EnvironmentManager from "../Environment/EnvironmentManager";
-import RequestHistory from "../RequestHistory/RequestHistory";
-import RequestTemplates from "../Templates/RequestTemplates";
-import { lazy, Suspense } from "react";
-import { Loader2 } from "lucide-react";
-
-const SchemaEditor = lazy(() => import("../SchemaEditor/SchemaEditor"));
-const MockServerPanel = lazy(() => import("../MockServer/MockServerPanel"));
-const DocGenerator = lazy(() => import("../Docs/DocGenerator"));
-import ImportExport from "../ImportExport/ImportExport";
-import WorkspaceManager from "../Workspaces/WorkspaceManager";
-import RequestChainBuilder from "../RequestChaining/RequestChainBuilder";
-import TemplateLibrary from "../Templates/TemplateLibrary";
-import Button from "../UI/Button";
-import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts";
-import FeatureGate from "../FeatureGate/FeatureGate";
+import PublicLeftPanel from './PublicLeftPanel';
 
 interface LeftPanelProps {
   view: "collections" | "history" | "templates" | "environments" | "schema" | "mock" | "docs" | "workspaces" | "chains" | null;
@@ -31,164 +14,12 @@ interface LeftPanelProps {
 }
 
 export default function LeftPanel({ view, isOpen, onClose, onNewRequest }: LeftPanelProps) {
-  // Keyboard shortcut: Esc to close
-  useKeyboardShortcuts([
-    {
-      key: "Escape",
-      handler: () => {
-        if (isOpen) {
-          onClose();
-        }
-      },
-      description: "Close panel",
-    },
-  ]);
-
-  if (!isOpen || !view) return null;
-
-  const getTitle = () => {
-    switch (view) {
-      case "collections":
-        return "Collections";
-      case "history":
-        return "Request History";
-      case "templates":
-        return "Templates";
-      case "environments":
-        return "Environments";
-      case "schema":
-        return "Schema Editor";
-      case "mock":
-        return "Mock Server";
-      case "docs":
-        return "Documentation";
-      case "workspaces":
-        return "Workspaces";
-      case "chains":
-        return "Request Chains";
-      default:
-        return "";
-    }
-  };
-
-  const renderContent = () => {
-    switch (view) {
-      case "collections":
-        return (
-          <FeatureGate feature="collections">
-            <div className="p-4 space-y-4">
-              <CollectionManager />
-              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                <ImportExport />
-              </div>
-            </div>
-          </FeatureGate>
-        );
-      case "history":
-        return <RequestHistory />;
-      case "templates":
-        return (
-          <FeatureGate feature="templates">
-            <div className="p-4">
-              <TemplateLibrary />
-            </div>
-          </FeatureGate>
-        );
-      case "environments":
-        return (
-          <FeatureGate feature="environments">
-            <div className="p-4">
-              <EnvironmentManager />
-            </div>
-          </FeatureGate>
-        );
-      case "schema":
-        return (
-          <Suspense fallback={<div className="p-4 text-center"><Loader2 className="animate-spin mx-auto" /></div>}>
-            <SchemaEditor onSchemaSelect={() => {}} />
-          </Suspense>
-        );
-      case "mock":
-        return (
-          <FeatureGate feature="mock_server">
-            <Suspense fallback={<div className="p-4 text-center"><Loader2 className="animate-spin mx-auto" /></div>}>
-              <MockServerPanel />
-            </Suspense>
-          </FeatureGate>
-        );
-      case "docs":
-        return (
-          <Suspense fallback={<div className="p-4 text-center"><Loader2 className="animate-spin mx-auto" /></div>}>
-            <DocGenerator />
-          </Suspense>
-        );
-      case "workspaces":
-        return (
-          <div className="p-4">
-            <WorkspaceManager />
-          </div>
-        );
-      case "chains":
-        return (
-          <FeatureGate feature="request_chaining">
-            <div className="p-4">
-              <RequestChainBuilder />
-            </div>
-          </FeatureGate>
-        );
-      default:
-        return null;
-    }
-  };
-
   return (
-    <>
-      {/* Mobile overlay/backdrop */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden transition-opacity"
-          onClick={onClose}
-          aria-hidden="true"
-        />
-      )}
-      
-      {/* Panel */}
-      <div className={`
-        fixed md:relative inset-y-0 left-0 z-50 md:z-auto
-        w-full md:w-80 lg:w-96
-        bg-white dark:bg-gray-800 
-        border-r border-gray-300 dark:border-gray-700 
-        flex flex-col h-full 
-        shadow-lg md:shadow-md
-        transform transition-transform duration-300 ease-in-out
-        ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-      `}>
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
-          <div className="flex items-center gap-2.5">
-            <div className="w-1.5 h-7 bg-gradient-to-b from-blue-600 to-blue-500 rounded-full shadow-sm" />
-            <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-              {getTitle()}
-            </h2>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onClose}
-            title="Đóng panel (Esc)"
-            className="hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
-            aria-label="Close panel"
-          >
-            <X size={18} />
-          </Button>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 bg-gray-50 dark:bg-gray-900/30">
-          {renderContent()}
-        </div>
-      </div>
-    </>
+    <PublicLeftPanel
+      view={view}
+      isOpen={isOpen}
+      onClose={onClose}
+      onNewRequest={onNewRequest}
+    />
   );
 }
-

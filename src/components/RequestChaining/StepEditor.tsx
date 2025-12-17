@@ -16,7 +16,10 @@ export default function StepEditor({
   onCancel,
   availableVariables,
 }: StepEditorProps) {
-  const [editedStep, setEditedStep] = useState<ChainStep>({ ...step });
+  const [editedStep, setEditedStep] = useState<ChainStep>({ 
+    ...step,
+    extractors: step.extractors || []
+  });
 
   const handleAddExtractor = () => {
     const newExtractor: DataExtractor = {
@@ -100,7 +103,7 @@ export default function StepEditor({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                URL (có thể dùng {{variable}})
+                {`URL (có thể dùng {{variable}})`}
               </label>
               <input
                 type="text"
@@ -156,7 +159,7 @@ export default function StepEditor({
             editedStep.method === "PATCH") && (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Request Body (có thể dùng {{variable}})
+                {`Request Body (có thể dùng {{variable}})`}
               </label>
               <textarea
                 value={editedStep.body || ""}

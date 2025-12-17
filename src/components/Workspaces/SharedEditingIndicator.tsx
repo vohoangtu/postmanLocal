@@ -36,7 +36,7 @@ export default function SharedEditingIndicator({
   const hasConflict = editingUsers.length > 1;
 
   return (
-    <div className={`flex items-center gap-2 px-3 py-2 rounded-md border-2 ${
+    <div className={`flex items-center gap-2 px-3 py-2 rounded-md border ${
       hasConflict
         ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700'
         : 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700'
@@ -71,7 +71,7 @@ export default function SharedEditingIndicator({
         {editingUsers.slice(0, 3).map((user) => (
           <div
             key={user.id}
-            className="w-6 h-6 rounded-full bg-orange-500 flex items-center justify-center text-white text-xs font-medium border-2 border-white dark:border-gray-800"
+            className="w-6 h-6 rounded-full bg-orange-500 flex items-center justify-center text-white text-xs font-medium border border-white dark:border-gray-800"
             title={user.name || user.email || 'User'}
           >
             {user.name?.charAt(0).toUpperCase() || 'U'}
@@ -80,7 +80,7 @@ export default function SharedEditingIndicator({
         {viewingUsers.slice(0, 3).map((user) => (
           <div
             key={user.id}
-            className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-medium border-2 border-white dark:border-gray-800"
+            className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-medium border border-white dark:border-gray-800"
             title={user.name || user.email || 'User'}
           >
             {user.name?.charAt(0).toUpperCase() || 'U'}

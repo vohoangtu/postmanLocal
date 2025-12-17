@@ -3,9 +3,8 @@
  * Quản lý collection operations với backend API
  */
 
-import { authService } from './authService';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+import apiClient from './apiClient';
+import type { Collection, Request, CreateCollectionFormData } from '../types/workspace';
 
 /**
  * Helper function để parse collection.data từ nhiều format khác nhau
@@ -29,44 +28,26 @@ function parseCollectionData(data: any): any {
   return {};
 }
 
-export interface Request {
-  id: string;
-  name: string;
-  method: string;
-  url: string;
-  headers?: Record<string, string>;
-  body?: string;
-  queryParams?: Array<{ key: string; value: string; enabled: boolean }>;
-  folderId?: string;
-}
+// Re-export types from workspace types
+export type { Request, Collection, CreateCollectionFormData } from '../types/workspace';
 
 /**
  * Lấy collection từ backend
  */
-export async function getCollection(collectionId: string): Promise<any> {
-  const token = await authService.getAccessToken();
-  if (!token) {
-    throw new Error('Chưa đăng nhập');
-  }
-
-  const response = await fetch(`${API_BASE_URL}/collections/${collectionId}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+export async function getCollection(collectionId: string): Promise<Collection> {
+  try {
+    return await apiClient.get<Collection>(`/collections/${collectionId}`);
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      if (error.message.includes('401') || error.message.includes('hết hạn')) {
+        throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+      }
+      if (error.message.includes('404') || error.message.includes('không tồn tại')) {
+        throw new Error('Collection không tồn tại.');
+      }
     }
-    if (response.status === 404) {
-      throw new Error('Collection không tồn tại.');
-    }
-    const error = await response.json().catch(() => ({ message: response.statusText }));
-    throw new Error(error.message || `Failed to get collection: ${response.statusText}`);
+    throw error;
   }
-
-  return await response.json();
 }
 
 /**
@@ -75,12 +56,7 @@ export async function getCollection(collectionId: string): Promise<any> {
 export async function updateCollectionRequests(
   collectionId: string,
   requests: Request[]
-): Promise<any> {
-  const token = await authService.getAccessToken();
-  if (!token) {
-    throw new Error('Chưa đăng nhập');
-  }
-
+): Promise<Collection> {
   // Lấy collection hiện tại
   const collection = await getCollection(collectionId);
 
@@ -97,32 +73,23 @@ export async function updateCollectionRequests(
     collectionId,
     currentRequestsCount: currentData?.requests?.length || 0,
     newRequestsCount: requests.length,
-    updatedData
   });
 
-  const response = await fetch(`${API_BASE_URL}/collections/${collectionId}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      data: updatedData, // Laravel sẽ tự động cast thành JSON
-    }),
-  });
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+  try {
+    return await apiClient.put<Collection>(`/collections/${collectionId}`, {
+      data: updatedData,
+    });
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      if (error.message.includes('401') || error.message.includes('hết hạn')) {
+        throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+      }
+      if (error.message.includes('404') || error.message.includes('không tồn tại')) {
+        throw new Error('Collection không tồn tại.');
+      }
     }
-    if (response.status === 404) {
-      throw new Error('Collection không tồn tại.');
-    }
-    const error = await response.json().catch(() => ({ message: response.statusText }));
-    throw new Error(error.message || `Failed to update collection: ${response.statusText}`);
+    throw error;
   }
-
-  return await response.json();
 }
 
 /**
@@ -131,12 +98,7 @@ export async function updateCollectionRequests(
 export async function addRequestToCollection(
   collectionId: string,
   request: Request
-): Promise<any> {
-  const token = await authService.getAccessToken();
-  if (!token) {
-    throw new Error('Chưa đăng nhập');
-  }
-
+): Promise<Collection> {
   try {
     // Lấy collection hiện tại
     const collection = await getCollection(collectionId);
@@ -176,12 +138,7 @@ export async function addRequestToCollection(
 export async function removeRequestFromCollection(
   collectionId: string,
   requestId: string
-): Promise<any> {
-  const token = await authService.getAccessToken();
-  if (!token) {
-    throw new Error('Chưa đăng nhập');
-  }
-
+): Promise<Collection> {
   // Lấy collection hiện tại
   const collection = await getCollection(collectionId);
 
@@ -205,12 +162,7 @@ export async function updateRequestInCollection(
   collectionId: string,
   requestId: string,
   updates: Partial<Request>
-): Promise<any> {
-  const token = await authService.getAccessToken();
-  if (!token) {
-    throw new Error('Chưa đăng nhập');
-  }
-
+): Promise<Collection> {
   // Lấy collection hiện tại
   const collection = await getCollection(collectionId);
 
@@ -232,58 +184,106 @@ export async function updateRequestInCollection(
 /**
  * Lấy default collection của user hiện tại
  */
-export async function getDefaultCollection(): Promise<any> {
-  const token = await authService.getAccessToken();
-  if (!token) {
-    throw new Error('Chưa đăng nhập');
-  }
-
-  const response = await fetch(`${API_BASE_URL}/collections/default`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+export async function getDefaultCollection(): Promise<Collection> {
+  try {
+    return await apiClient.get<Collection>('/collections/default');
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      if (error.message.includes('401') || error.message.includes('hết hạn')) {
+        throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+      }
+      if (error.message.includes('404') || error.message.includes('không tồn tại')) {
+        throw new Error('Chưa có default collection. Vui lòng tạo collection mới.');
+      }
     }
-    if (response.status === 404) {
-      throw new Error('Chưa có default collection. Vui lòng tạo collection mới.');
-    }
-    const error = await response.json().catch(() => ({ message: response.statusText }));
-    throw new Error(error.message || `Failed to get default collection: ${response.statusText}`);
+    throw error;
   }
-
-  return await response.json();
 }
 
 /**
  * Set collection làm default
  */
-export async function setDefaultCollection(collectionId: string): Promise<any> {
-  const token = await authService.getAccessToken();
-  if (!token) {
-    throw new Error('Chưa đăng nhập');
-  }
-
-  const response = await fetch(`${API_BASE_URL}/collections/${collectionId}/set-default`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+export async function setDefaultCollection(collectionId: string): Promise<Collection> {
+  try {
+    return await apiClient.post<Collection>(`/collections/${collectionId}/set-default`);
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      if (error.message.includes('401') || error.message.includes('hết hạn')) {
+        throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+      }
+      if (error.message.includes('404') || error.message.includes('không tồn tại')) {
+        throw new Error('Collection không tồn tại.');
+      }
     }
-    if (response.status === 404) {
-      throw new Error('Collection không tồn tại.');
-    }
-    const error = await response.json().catch(() => ({ message: response.statusText }));
-    throw new Error(error.message || `Failed to set default collection: ${response.statusText}`);
+    throw error;
   }
+}
 
-  return await response.json();
+/**
+ * Lấy danh sách collections của user (không còn workspace)
+ */
+export async function getCollections(): Promise<Collection[]> {
+  try {
+    return await apiClient.get<Collection[]>('/collections');
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      throw new Error(`Không thể tải collections: ${error.message}`);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Tạo collection mới (user-owned)
+ */
+export async function createCollection(data: CreateCollectionFormData): Promise<Collection> {
+  try {
+    return await apiClient.post<Collection>('/collections', {
+      name: data.name,
+      description: data.description,
+      data: { requests: [] },
+    });
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      throw new Error(`Không thể tạo collection: ${error.message}`);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Xóa collection
+ */
+export async function deleteCollection(collectionId: string): Promise<void> {
+  try {
+    await apiClient.delete(`/collections/${collectionId}`);
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      if (error.message.includes('404')) {
+        throw new Error('Collection không tồn tại.');
+      }
+      throw new Error(`Không thể xóa collection: ${error.message}`);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Cập nhật collection
+ */
+export async function updateCollection(
+  collectionId: string,
+  updates: Partial<Collection>
+): Promise<Collection> {
+  try {
+    return await apiClient.put<Collection>(`/collections/${collectionId}`, updates);
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      if (error.message.includes('404')) {
+        throw new Error('Collection không tồn tại.');
+      }
+      throw new Error(`Không thể cập nhật collection: ${error.message}`);
+    }
+    throw error;
+  }
 }

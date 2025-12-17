@@ -8,13 +8,13 @@ import { useParams } from 'react-router-dom';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useToast } from '../../hooks/useToast';
 import { useWorkspacePermission } from '../../hooks/useWorkspacePermission';
-import { authService } from '../../services/authService';
+import * as apiDesignReviewService from '../../services/apiDesignReviewService';
 import Button from '../UI/Button';
 import Card from '../UI/Card';
 import Badge from '../UI/Badge';
-import { CheckCircle2, XCircle, AlertCircle, MessageSquare, Loader2 } from 'lucide-react';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+import Skeleton from '../UI/Skeleton';
+import ErrorMessage from '../Error/ErrorMessage';
+import { CheckCircle2, XCircle, AlertCircle, MessageSquare } from 'lucide-react';
 
 interface DesignReview {
   id: string;
@@ -35,9 +35,11 @@ export default function ApiDesignReview() {
   const toast = useToast();
   const permissions = useWorkspacePermission(currentWorkspace);
 
-  const [reviews, setReviews] = useState<DesignReview[]>([]);
+  const [reviews, setReviews] = useState<apiDesignReviewService.ApiDesignReview[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
     if (workspaceId) {
@@ -48,56 +50,51 @@ export default function ApiDesignReview() {
   const loadReviews = async () => {
     if (!workspaceId) return;
     setIsLoading(true);
+    setError(null);
     try {
-      const token = await authService.getAccessToken();
-      if (!token) throw new Error('Chưa đăng nhập');
-
-      const url = new URL(`${API_BASE_URL}/workspaces/${workspaceId}/design-reviews`);
-      if (selectedStatus !== 'all') {
-        url.searchParams.set('status', selectedStatus);
-      }
-
-      const response = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!response.ok) throw new Error('Failed to load reviews');
-
-      const data = await response.json();
-      setReviews(Array.isArray(data) ? data : []);
+      const reviewsData = await apiDesignReviewService.getWorkspaceDesignReviews(workspaceId);
+      // Filter by status if needed
+      const filtered = selectedStatus === 'all' 
+        ? reviewsData 
+        : reviewsData.filter(r => r.status === selectedStatus);
+      setReviews(filtered);
     } catch (error: any) {
-      toast.error(error.message || 'Failed to load reviews');
+      const errorMessage = error.message || 'Failed to load design reviews';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleApprove = async (reviewId: string) => {
+    setActionLoading(reviewId);
     try {
-      const token = await authService.getAccessToken();
-      if (!token) throw new Error('Chưa đăng nhập');
-
-      const response = await fetch(`${API_BASE_URL}/design-reviews/${reviewId}/approve`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ comments: '' }),
-      });
-
-      if (!response.ok) throw new Error('Failed to approve');
-
+      await apiDesignReviewService.approveDesignReview(reviewId);
       toast.success('Design approved');
-      loadReviews();
+      await loadReviews();
     } catch (error: any) {
       toast.error(error.message || 'Failed to approve design');
+    } finally {
+      setActionLoading(null);
     }
   };
 
   const handleReject = async (reviewId: string) => {
     const comments = prompt('Enter rejection reason:');
     if (!comments) return;
+    
+    setActionLoading(reviewId);
+    try {
+      await apiDesignReviewService.rejectDesignReview(reviewId, comments);
+      toast.success('Design rejected');
+      await loadReviews();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to reject design');
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
     try {
       const token = await authService.getAccessToken();
@@ -134,10 +131,14 @@ export default function ApiDesignReview() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading && reviews.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="animate-spin text-blue-600" size={32} />
+      <div className="p-6 space-y-4">
+        {[1, 2, 3].map((i) => (
+          <Card key={i} className="p-4">
+            <Skeleton variant="text" lines={3} />
+          </Card>
+        ))}
       </div>
     );
   }
@@ -175,6 +176,15 @@ export default function ApiDesignReview() {
         ))}
       </div>
 
+      {error && (
+        <div className="mb-4">
+          <ErrorMessage 
+            error={error} 
+            onRetry={loadReviews}
+          />
+        </div>
+      )}
+
       {/* Reviews List */}
       {reviews.length === 0 ? (
         <Card>
@@ -189,15 +199,15 @@ export default function ApiDesignReview() {
               key={review.id}
               title={
                 <div className="flex items-center gap-2">
-                  <span>{review.schema.name}</span>
+                  <span>{review.schema?.name || 'Unknown Schema'}</span>
                   {getStatusBadge(review.status)}
                 </div>
               }
             >
               <div className="space-y-3">
-                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
                   <div>
-                    <strong>Requested by:</strong> {review.requested_by.name}
+                    <strong>Requested by:</strong> {review.requester?.name || 'Unknown'}
                   </div>
                   {review.reviewer && (
                     <div>
@@ -210,7 +220,7 @@ export default function ApiDesignReview() {
                   </div>
                 </div>
                 {review.comments && (
-                  <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded border-2 border-gray-200 dark:border-gray-700">
+                  <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700">
                     <div className="flex items-start gap-2">
                       <MessageSquare size={16} className="text-gray-500 mt-0.5" />
                       <p className="text-sm text-gray-700 dark:text-gray-300">
@@ -226,18 +236,30 @@ export default function ApiDesignReview() {
                       size="sm"
                       onClick={() => handleApprove(review.id)}
                       className="flex items-center gap-1"
+                      disabled={actionLoading === review.id}
                     >
                       <CheckCircle2 size={14} />
-                      Approve
+                      {actionLoading === review.id ? 'Processing...' : 'Approve'}
                     </Button>
                     <Button
                       variant="danger"
                       size="sm"
                       onClick={() => handleReject(review.id)}
                       className="flex items-center gap-1"
+                      disabled={actionLoading === review.id}
                     >
                       <XCircle size={14} />
                       Reject
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleRequestChanges(review.id)}
+                      className="flex items-center gap-1"
+                      disabled={actionLoading === review.id}
+                    >
+                      <AlertCircle size={14} />
+                      Request Changes
                     </Button>
                   </div>
                 )}

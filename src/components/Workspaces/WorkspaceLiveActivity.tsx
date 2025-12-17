@@ -141,7 +141,7 @@ export default function WorkspaceLiveActivity() {
           {filteredActivities.map((activity) => (
             <div
               key={activity.id}
-              className="p-3 bg-white dark:bg-gray-800 rounded-lg border-2 border-gray-300 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow"
+              className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow"
             >
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-medium flex-shrink-0">

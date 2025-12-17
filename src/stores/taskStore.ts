@@ -1,46 +1,17 @@
 /**
  * Task Store
- * Quản lý tasks trong workspace
+ * Quản lý tasks trong collection
  */
 
 import { create } from 'zustand';
 import { authService } from '../services/authService';
-
-export interface Task {
-  id: string;
-  workspace_id: string;
-  collection_id?: string;
-  request_id?: string;
-  title: string;
-  description?: string;
-  assigned_to?: string;
-  created_by: string;
-  status: 'todo' | 'in_progress' | 'done' | 'cancelled';
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-  due_date?: string;
-  assigned_user?: {
-    id: string;
-    name: string;
-    email: string;
-  };
-  creator?: {
-    id: string;
-    name: string;
-    email: string;
-  };
-  collection?: {
-    id: string;
-    name: string;
-  };
-  created_at: string;
-  updated_at: string;
-}
+import type { Task } from '../types/workspace';
 
 interface TaskStore {
   tasks: Task[];
   loading: boolean;
-  loadTasks: (workspaceId: string, filters?: any) => Promise<void>;
-  createTask: (workspaceId: string, taskData: Partial<Task>) => Promise<Task>;
+  loadTasks: (collectionId: string, filters?: any) => Promise<void>;
+  createTask: (collectionId: string, taskData: Partial<Task>) => Promise<Task>;
   updateTask: (taskId: string, updates: Partial<Task>) => Promise<void>;
   deleteTask: (taskId: string) => Promise<void>;
   assignTask: (taskId: string, userId: string) => Promise<void>;
@@ -52,7 +23,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   tasks: [],
   loading: false,
 
-  loadTasks: async (workspaceId, filters = {}) => {
+  loadTasks: async (collectionId, filters = {}) => {
     set({ loading: true });
     try {
       const token = await authService.getAccessToken();
@@ -63,7 +34,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
         if (value) params.append(key, value.toString());
       });
 
-      const url = `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"}/workspaces/${workspaceId}/tasks${params.toString() ? `?${params.toString()}` : ''}`;
+      const url = `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"}/collections/${collectionId}/tasks${params.toString() ? `?${params.toString()}` : ''}`;
       
       const response = await fetch(url, {
         headers: {
@@ -83,20 +54,20 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     }
   },
 
-  createTask: async (workspaceId, taskData) => {
+  createTask: async (collectionId, taskData) => {
     try {
       const token = await authService.getAccessToken();
       if (!token) throw new Error('Not authenticated');
 
       const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"}/workspaces/${workspaceId}/tasks`,
+        `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"}/collections/${collectionId}/tasks`,
         {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(taskData),
+          body: JSON.stringify({ ...taskData, collection_id: collectionId }),
         }
       );
 

@@ -3,112 +3,156 @@
  * Quản lý team discussions trong workspace
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useDiscussionStore, Discussion } from '../../stores/discussionStore';
 import { useWorkspacePermission } from '../../hooks/useWorkspacePermission';
+import { useWorkspaceData } from '../../hooks/useWorkspaceData';
+import { useWorkspaceWebSocket } from '../../hooks/useWorkspaceWebSocket';
+import { useAsyncOperation } from '../../hooks/useAsyncOperation';
 import { useToast } from '../../hooks/useToast';
-import { websocketService } from '../../services/websocketService';
 import Button from '../UI/Button';
 import DiscussionThread from './DiscussionThread';
 import EmptyState from '../EmptyStates/EmptyState';
-import { MessageSquare, Plus, Filter, Loader2, CheckCircle2, Circle } from 'lucide-react';
+import PageLayout from '../Layout/PageLayout';
+import PageToolbar from '../Layout/PageToolbar';
+import { MessageSquare, Plus, CheckCircle2 } from 'lucide-react';
 import Select from '../UI/Select';
 import Modal from '../UI/Modal';
 import Input from '../UI/Input';
 import Textarea from '../UI/Textarea';
 import Badge from '../UI/Badge';
+import Skeleton from '../UI/Skeleton';
+import ErrorMessage from '../Error/ErrorMessage';
+import type { DiscussionFilters, CreateDiscussionFormData } from '../../types/workspace';
 
 export default function WorkspaceDiscussions() {
-  const { id } = useParams<{ id: string }>();
-  const { currentWorkspace, loadWorkspace } = useWorkspaceStore();
+  const { id: workspaceId } = useParams<{ id: string }>();
+  const { workspace, loading: workspaceLoading, error: workspaceError } = useWorkspaceData(workspaceId);
   const {
     discussions,
-    loading,
+    loading: discussionsLoading,
     loadDiscussions,
     createDiscussion,
   } = useDiscussionStore();
-  const permissions = useWorkspacePermission(currentWorkspace);
+  const permissions = useWorkspacePermission(workspace);
   const toast = useToast();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedDiscussion, setSelectedDiscussion] = useState<Discussion | null>(null);
   const [filterResolved, setFilterResolved] = useState<string>('');
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<CreateDiscussionFormData>({
     title: '',
     content: '',
   });
 
-  useEffect(() => {
-    if (id) {
-      loadWorkspace(id);
-      loadDiscussions(id, filterResolved ? { resolved: filterResolved === 'true' } : {});
+  // Discussion filters
+  const discussionFilters = useMemo<DiscussionFilters>(() => {
+    return filterResolved ? { resolved: filterResolved === 'true' } : {};
+  }, [filterResolved]);
+
+  // Load discussions operation
+  const {
+    loading: loadingDiscussions,
+    error: discussionsError,
+    execute: loadDiscussionsWithErrorHandling,
+  } = useAsyncOperation(
+    async () => {
+      if (!workspaceId) throw new Error('Workspace ID không hợp lệ');
+      await loadDiscussions(workspaceId, discussionFilters);
+    },
+    {
+      onError: (error) => {
+        console.error('Failed to load discussions:', error);
+      },
     }
-  }, [id, loadWorkspace, loadDiscussions]);
+  );
 
   useEffect(() => {
-    if (id) {
-      loadDiscussions(id, filterResolved ? { resolved: filterResolved === 'true' } : {});
+    if (workspaceId) {
+      loadDiscussionsWithErrorHandling();
     }
-  }, [filterResolved, id, loadDiscussions]);
+  }, [workspaceId, discussionFilters, loadDiscussionsWithErrorHandling]);
 
   // Subscribe to real-time updates
-  useEffect(() => {
-    if (!id) return;
+  useWorkspaceWebSocket(
+    workspaceId,
+    useMemo(
+      () => [
+        {
+          channel: `private-workspace.${workspaceId || ''}`,
+          event: 'discussion.created',
+          handler: () => {
+            if (workspaceId) {
+              loadDiscussions(workspaceId, discussionFilters);
+            }
+          },
+        },
+        {
+          channel: `private-workspace.${workspaceId || ''}`,
+          event: 'discussion.replied',
+          handler: () => {
+            if (workspaceId) {
+              loadDiscussions(workspaceId, discussionFilters);
+            }
+          },
+        },
+      ],
+      [workspaceId, discussionFilters, loadDiscussions]
+    )
+  );
 
-    const unsubscribe = websocketService.subscribe(
-      `private-workspace.${id}`,
-      'discussion.created',
-      () => {
-        loadDiscussions(id, filterResolved ? { resolved: filterResolved === 'true' } : {});
+  const loading = workspaceLoading || discussionsLoading || loadingDiscussions;
+  const error = workspaceError || discussionsError;
+
+  // Create discussion operation
+  const {
+    loading: creating,
+    execute: executeCreateDiscussion,
+  } = useAsyncOperation<Discussion>(
+    async () => {
+      if (!formData.title.trim() || !formData.content.trim() || !workspaceId) {
+        throw new Error('Tiêu đề và nội dung discussion là bắt buộc');
       }
-    );
 
-    const unsubscribeReply = websocketService.subscribe(
-      `private-workspace.${id}`,
-      'discussion.replied',
-      () => {
-        loadDiscussions(id, filterResolved ? { resolved: filterResolved === 'true' } : {});
-      }
-    );
-
-    return () => {
-      unsubscribe();
-      unsubscribeReply();
-    };
-  }, [id, filterResolved, loadDiscussions]);
-
-  const handleCreateDiscussion = async () => {
-    if (!formData.title.trim() || !formData.content.trim() || !id) return;
-
-    try {
-      await createDiscussion(id, formData);
-      toast.success('Discussion created successfully');
+      const newDiscussion = await createDiscussion(workspaceId, formData);
+      toast.success('Đã tạo discussion thành công');
       setShowCreateModal(false);
       setFormData({ title: '', content: '' });
-      loadDiscussions(id, filterResolved ? { resolved: filterResolved === 'true' } : {});
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to create discussion');
+      if (workspaceId) {
+        await loadDiscussions(workspaceId, discussionFilters);
+      }
+      return newDiscussion;
+    },
+    {
+      onError: (error) => {
+        toast.error(error.message || 'Không thể tạo discussion');
+      },
     }
+  );
+
+  const handleCreateDiscussion = () => {
+    executeCreateDiscussion();
   };
 
-  if (!currentWorkspace || !currentWorkspace.is_team) {
+  if (!workspace || !workspace.is_team) {
     return (
       <div className="p-6">
         <div className="text-center text-gray-500 dark:text-gray-400">
-          This workspace is not a team workspace.
+          Workspace này không phải là team workspace.
         </div>
       </div>
     );
   }
 
-  const filteredDiscussions = discussions.filter((d) => {
-    if (filterResolved === 'true' && !d.resolved) return false;
-    if (filterResolved === 'false' && d.resolved) return false;
-    return true;
-  });
+  const filteredDiscussions = useMemo(() => {
+    return discussions.filter((d) => {
+      if (filterResolved === 'true' && !d.resolved) return false;
+      if (filterResolved === 'false' && d.resolved) return false;
+      return true;
+    });
+  }, [discussions, filterResolved]);
 
   if (selectedDiscussion) {
     return (
@@ -121,47 +165,74 @@ export default function WorkspaceDiscussions() {
     );
   }
 
-  return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-            Discussions
-          </h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Team discussions and conversations
-          </p>
-        </div>
-        {permissions.canEdit && (
-          <Button
-            variant="primary"
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2"
-          >
-            <Plus size={16} />
-            New Discussion
-          </Button>
-        )}
-      </div>
+  const renderToolbar = useCallback(() => {
+    return (
+      <PageToolbar
+        leftSection={
+          <>
+            <MessageSquare size={20} className="text-gray-600 dark:text-gray-400" />
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                Discussions
+              </h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {filteredDiscussions.length} discussion{filteredDiscussions.length !== 1 ? 's' : ''} • Team discussions and conversations
+              </p>
+            </div>
+          </>
+        }
+        rightSection={
+          permissions.canEdit && (
+            <Button
+              variant="primary"
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-2"
+            >
+              <Plus size={16} />
+              New Discussion
+            </Button>
+          )
+        }
+      >
+        {/* Toolbar content */}
+      </PageToolbar>
+    );
+  }, [filteredDiscussions.length, permissions.canEdit]);
 
-      {/* Filter */}
-      <div className="mb-6">
-        <Select
-          label="Filter"
-          value={filterResolved}
-          onChange={(e) => setFilterResolved(e.target.value)}
-          options={[
-            { value: '', label: 'All Discussions' },
-            { value: 'false', label: 'Open' },
-            { value: 'true', label: 'Resolved' },
-          ]}
-          className="w-48"
-        />
-      </div>
+  return (
+    <>
+      <PageLayout toolbar={renderToolbar()}>
+        {/* Filter */}
+        <div className="mb-6">
+          <Select
+            label="Filter"
+            value={filterResolved}
+            onChange={(e) => setFilterResolved(e.target.value)}
+            options={[
+              { value: '', label: 'All Discussions' },
+              { value: 'false', label: 'Open' },
+              { value: 'true', label: 'Resolved' },
+            ]}
+            className="w-48"
+          />
+        </div>
+
+        {error && (
+        <div className="mb-4">
+          <ErrorMessage 
+            error={error} 
+            onRetry={() => loadDiscussionsWithErrorHandling()}
+          />
+        </div>
+      )}
 
       {loading && discussions.length === 0 ? (
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="animate-spin text-blue-600" size={32} />
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700 p-4">
+              <Skeleton variant="text" lines={2} />
+            </div>
+          ))}
         </div>
       ) : filteredDiscussions.length === 0 ? (
         <EmptyState
@@ -183,7 +254,7 @@ export default function WorkspaceDiscussions() {
             <div
               key={discussion.id}
               onClick={() => setSelectedDiscussion(discussion)}
-              className="bg-white dark:bg-gray-800 rounded-lg border-2 border-gray-300 dark:border-gray-700 p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+              className="bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700 p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
             >
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1">
@@ -220,6 +291,7 @@ export default function WorkspaceDiscussions() {
           ))}
         </div>
       )}
+      </PageLayout>
 
       {/* Create Discussion Modal */}
       <Modal
@@ -244,9 +316,9 @@ export default function WorkspaceDiscussions() {
             <Button
               variant="primary"
               onClick={handleCreateDiscussion}
-              disabled={!formData.title.trim() || !formData.content.trim()}
+              disabled={!formData.title.trim() || !formData.content.trim() || creating}
             >
-              Create
+              {creating ? 'Đang tạo...' : 'Tạo'}
             </Button>
           </>
         }

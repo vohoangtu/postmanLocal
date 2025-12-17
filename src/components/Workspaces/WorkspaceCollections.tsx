@@ -3,36 +3,40 @@
  * Hiển thị và quản lý collections trong workspace
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useCollectionStore } from '../../stores/collectionStore';
-import { authService } from '../../services/authService';
+import { 
+  getCollections, 
+  createCollection, 
+  deleteCollection 
+} from '../../services/collectionService';
 import { useToast } from '../../hooks/useToast';
+import { useWorkspaceData } from '../../hooks/useWorkspaceData';
+import { useAsyncOperation } from '../../hooks/useAsyncOperation';
 import Button from '../UI/Button';
-import Card from '../UI/Card';
 import EmptyState from '../EmptyStates/EmptyState';
 import Input from '../UI/Input';
 import Select from '../UI/Select';
-import { Folder, Plus, FolderOpen, Loader2, Settings, FileCode, Upload, Download, Search, Filter, Trash2, CheckSquare } from 'lucide-react';
+import PageLayout from '../Layout/PageLayout';
+import PageToolbar from '../Layout/PageToolbar';
+import CollectionCard from '../Collections/CollectionCard';
+import { Folder, Plus, FolderOpen, Settings, FileCode, Upload, Search, Trash2 } from 'lucide-react';
 import SkeletonLoader from '../UI/SkeletonLoader';
 import ErrorMessage from '../Error/ErrorMessage';
-import ErrorRetry from '../Error/ErrorRetry';
 import { useNavigate } from 'react-router-dom';
-import LiveCollaborators from './LiveCollaborators';
 import CollectionPermissionsModal from './CollectionPermissionsModal';
 import CollectionTemplateManager from './CollectionTemplateManager';
 import CollectionImportExport from './CollectionImportExport';
 import { useWorkspacePermission } from '../../hooks/useWorkspacePermission';
 import TabButton from '../UI/TabButton';
+import type { Collection, CreateCollectionFormData } from '../../types/workspace';
 
 export default function WorkspaceCollections() {
-  const { id } = useParams<{ id: string }>();
+  const { id: workspaceId } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { currentWorkspace } = useWorkspaceStore();
+  const { workspace, loading: workspaceLoading, error: workspaceError } = useWorkspaceData(workspaceId);
   const { collections, setCollections } = useCollectionStore();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState('');
   const [showPermissionsModal, setShowPermissionsModal] = useState(false);
@@ -42,125 +46,126 @@ export default function WorkspaceCollections() {
   const [filterPermission, setFilterPermission] = useState('');
   const [selectedCollections, setSelectedCollections] = useState<string[]>([]);
   const toast = useToast();
-  const permissions = useWorkspacePermission(currentWorkspace);
+  const permissions = useWorkspacePermission(workspace);
+
+  // Load collections operation
+  const {
+    loading: collectionsLoading,
+    error: collectionsError,
+    execute: loadCollections,
+  } = useAsyncOperation<Collection[]>(
+    async () => {
+      if (!workspaceId) throw new Error('Workspace ID không hợp lệ');
+      const allCollections = await getCollections();
+      // Filter collections by workspace (nếu có workspace_id trong collection)
+      // Hoặc lấy tất cả collections nếu không có workspace_id field
+      const data = allCollections.filter((c: any) => 
+        !c.workspace_id || c.workspace_id?.toString() === workspaceId
+      );
+      setCollections(data);
+      return data;
+    },
+    {
+      onError: (error) => {
+        console.error('Failed to load collections:', error);
+      },
+    }
+  );
 
   useEffect(() => {
-    loadCollections();
-  }, [id]);
+    if (workspaceId) {
+      loadCollections();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId]);
 
-  const loadCollections = async () => {
-    if (!id) return;
-    
-    setLoading(true);
-    try {
-      const token = await authService.getAccessToken();
-      if (!token) return;
+  const loading = workspaceLoading || collectionsLoading;
+  const error = workspaceError || collectionsError;
 
-      const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"}/collections?workspace_id=${id}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        const collectionsList = Array.isArray(data) ? data : (data.data || []);
-        setCollections(collectionsList);
+  // Bulk delete operation
+  const {
+    loading: deleting,
+    execute: executeBulkDelete,
+  } = useAsyncOperation(
+    async () => {
+      if (selectedCollections.length === 0) return;
+      
+      if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedCollections.length} collection(s)?`)) {
+        return;
       }
-    } catch (error) {
-      console.error('Failed to load collections:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleBulkDelete = async () => {
-    if (selectedCollections.length === 0) return;
-    
-    if (!confirm(`Are you sure you want to delete ${selectedCollections.length} collection(s)?`)) {
-      return;
-    }
-
-    try {
-      const token = await authService.getAccessToken();
-      if (!token) return;
 
       // Delete each collection
       for (const collectionId of selectedCollections) {
-        const response = await fetch(
-          `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"}/collections/${collectionId}`,
-          {
-            method: 'DELETE',
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        if (!response.ok) {
-          const error = await response.json();
-          toast.error(`Failed to delete collection: ${error.message || 'Unknown error'}`);
+        try {
+          await deleteCollection(collectionId);
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          toast.error(`Không thể xóa collection: ${errorMessage}`);
         }
       }
 
-      toast.success(`${selectedCollections.length} collection(s) deleted successfully`);
+      toast.success(`Đã xóa thành công ${selectedCollections.length} collection(s)`);
       setSelectedCollections([]);
-      loadCollections();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to delete collections');
+      await loadCollections();
+    },
+    {
+      onError: (error) => {
+        toast.error(error.message || 'Không thể xóa collections');
+      },
     }
+  );
+
+  // Create collection operation
+  const {
+    loading: creating,
+    execute: executeCreateCollection,
+  } = useAsyncOperation<Collection>(
+    async () => {
+      if (!newCollectionName.trim() || !workspaceId) {
+        throw new Error('Tên collection và workspace ID là bắt buộc');
+      }
+
+      const formData: CreateCollectionFormData = {
+        name: newCollectionName.trim(),
+      };
+
+      const newCollection = await createCollection(formData);
+      toast.success('Đã tạo collection thành công');
+      setShowCreateModal(false);
+      setNewCollectionName('');
+      await loadCollections();
+      return newCollection;
+    },
+    {
+      onError: (error) => {
+        toast.error(error.message || 'Không thể tạo collection');
+      },
+    }
+  );
+
+  const handleCreateCollection = () => {
+    executeCreateCollection();
   };
 
-  const handleCreateCollection = async () => {
-    if (!newCollectionName.trim() || !id) return;
-
-    try {
-      const token = await authService.getAccessToken();
-      if (!token) return;
-
-      const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"}/collections`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            name: newCollectionName,
-            workspace_id: id,
-            data: { requests: [] },
-          }),
+  const workspaceCollections = useMemo(() => {
+    return collections
+      .filter((c: any) => {
+        // Filter by workspace if workspace_id exists, otherwise show all
+        if (c.workspace_id) {
+          return c.workspace_id.toString() === workspaceId;
         }
-      );
-
-      if (response.ok) {
-        toast.success('Collection created successfully');
-        setShowCreateModal(false);
-        setNewCollectionName('');
-        loadCollections();
-      } else {
-        const error = await response.json();
-        toast.error(error.message || 'Failed to create collection');
-      }
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to create collection');
-    }
-  };
-
-  const workspaceCollections = collections
-    .filter((c) => c.workspace_id?.toString() === id)
-    .filter((c) => {
-      if (searchQuery && !c.name.toLowerCase().includes(searchQuery.toLowerCase()) && 
-          !c.description?.toLowerCase().includes(searchQuery.toLowerCase())) {
-        return false;
-      }
-      // Filter by permission if needed
-      return true;
-    });
+        // Nếu không có workspace_id, hiển thị tất cả collections
+        return true;
+      })
+      .filter((c) => {
+        if (searchQuery && !c.name.toLowerCase().includes(searchQuery.toLowerCase()) && 
+            !c.description?.toLowerCase().includes(searchQuery.toLowerCase())) {
+          return false;
+        }
+        // Filter by permission if needed
+        return true;
+      });
+  }, [collections, workspaceId, searchQuery]);
 
   if (loading) {
     return (
@@ -170,114 +175,142 @@ export default function WorkspaceCollections() {
     );
   }
 
-  if (error && collections.length === 0) {
+  if (error && collections.length === 0 && !loading) {
     return (
       <div className="p-6">
         <ErrorMessage
           error={error}
           variant="banner"
-          onRetry={loadCollections}
-          onDismiss={() => setError(null)}
+          onRetry={() => loadCollections()}
         />
       </div>
     );
   }
 
-  return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+  const handleCollectionClick = useCallback((collectionId: string) => {
+    if (!workspaceId || !collectionId) {
+      console.error('Missing workspace ID or collection ID', { workspaceId, collectionId });
+      return;
+    }
+    const path = `/workspace/${workspaceId}/collections/${collectionId}/requests`;
+    navigate(path);
+  }, [workspaceId, navigate]);
+
+  const handleCollectionSelect = useCallback((collectionId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedCollections([...selectedCollections, collectionId]);
+    } else {
+      setSelectedCollections(selectedCollections.filter((id) => id !== collectionId));
+    }
+  }, [selectedCollections]);
+
+  const renderToolbar = useCallback(() => {
+    return (
+      <div className="space-y-4">
+        <PageToolbar
+          leftSection={
+            <>
+              <Folder size={20} className="text-gray-600 dark:text-gray-400" />
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                  Collections
+                </h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {activeTab === 'collections' 
+                    ? `${workspaceCollections.length} collection${workspaceCollections.length !== 1 ? 's' : ''}`
+                    : 'Browse and create from templates'}
+                </p>
+              </div>
+              {activeTab === 'collections' && (
+                <>
+                  <div className="relative flex-1 max-w-md">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                    <Input
+                      type="text"
+                      placeholder="Search collections..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10"
+                      fullWidth
+                    />
+                  </div>
+                  <Select
+                    value={filterPermission}
+                    onChange={(e) => setFilterPermission(e.target.value)}
+                    options={[
+                      { value: '', label: 'All Permissions' },
+                      { value: 'read', label: 'Read Only' },
+                      { value: 'write', label: 'Write' },
+                      { value: 'admin', label: 'Admin' },
+                    ]}
+                    className="w-48"
+                  />
+                </>
+              )}
+            </>
+          }
+          rightSection={
+            activeTab === 'collections' && (
+              <>
+                {selectedCollections.length > 0 && (
+                  <Button
+                    variant="danger"
+                    onClick={executeBulkDelete}
+                    disabled={deleting}
+                    className="flex items-center gap-2"
+                  >
+                    <Trash2 size={16} />
+                    {deleting ? 'Đang xóa...' : `Xóa (${selectedCollections.length})`}
+                  </Button>
+                )}
+                <Button
+                  variant="primary"
+                  onClick={() => setShowCreateModal(true)}
+                  className="flex items-center gap-2"
+                >
+                  <Plus size={16} />
+                  New Collection
+                </Button>
+              </>
+            )
+          }
+        />
+        {/* Tabs */}
+        <div className="flex gap-2 border-t border-gray-200 dark:border-gray-700 pt-4">
+          <TabButton
+            active={activeTab === 'collections'}
+            onClick={() => setActiveTab('collections')}
+            icon={FolderOpen}
+          >
             Collections
-          </h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            {activeTab === 'collections' 
-              ? `${workspaceCollections.length} collection${workspaceCollections.length !== 1 ? 's' : ''}`
-              : 'Browse and create from templates'}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {activeTab === 'collections' && selectedCollections.length > 0 && (
-            <Button
-              variant="danger"
-              onClick={handleBulkDelete}
-              className="flex items-center gap-2"
-            >
-              <Trash2 size={16} />
-              Delete ({selectedCollections.length})
-            </Button>
-          )}
-          {activeTab === 'collections' && (
-            <Button
-              variant="primary"
-              onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2"
-            >
-              <Plus size={16} />
-              New Collection
-            </Button>
-          )}
+          </TabButton>
+          <TabButton
+            active={activeTab === 'templates'}
+            onClick={() => setActiveTab('templates')}
+            icon={FileCode}
+          >
+            Templates
+          </TabButton>
+          <TabButton
+            active={activeTab === 'import-export'}
+            onClick={() => setActiveTab('import-export')}
+            icon={Upload}
+          >
+            Import/Export
+          </TabButton>
         </div>
       </div>
+    );
+  }, [activeTab, workspaceCollections.length, searchQuery, filterPermission, selectedCollections.length, deleting, executeBulkDelete]);
 
-      {/* Search and Filters */}
-      {activeTab === 'collections' && (
-        <div className="flex gap-3 mb-6">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-              <Input
-                type="text"
-                placeholder="Search collections..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-          </div>
-          <Select
-            value={filterPermission}
-            onChange={(e) => setFilterPermission(e.target.value)}
-            options={[
-              { value: '', label: 'All Permissions' },
-              { value: 'read', label: 'Read Only' },
-              { value: 'write', label: 'Write' },
-              { value: 'admin', label: 'Admin' },
-            ]}
-            className="w-48"
-          />
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex gap-2 mb-6 border-b-2 border-gray-300 dark:border-gray-700">
-        <TabButton
-          active={activeTab === 'collections'}
-          onClick={() => setActiveTab('collections')}
-          icon={FolderOpen}
-        >
-          Collections
-        </TabButton>
-        <TabButton
-          active={activeTab === 'templates'}
-          onClick={() => setActiveTab('templates')}
-          icon={FileCode}
-        >
-          Templates
-        </TabButton>
-        <TabButton
-          active={activeTab === 'import-export'}
-          onClick={() => setActiveTab('import-export')}
-          icon={Upload}
-        >
-          Import/Export
-        </TabButton>
-      </div>
+  return (
+    <>
+      <PageLayout toolbar={renderToolbar()}>
 
       {activeTab === 'templates' ? (
         <CollectionTemplateManager />
       ) : activeTab === 'import-export' ? (
-        <CollectionImportExport />
+        <CollectionImportExport onImportSuccess={() => loadCollections()} />
       ) : workspaceCollections.length === 0 ? (
         <EmptyState
           icon={FolderOpen}
@@ -293,56 +326,28 @@ export default function WorkspaceCollections() {
           {workspaceCollections.map((collection) => (
             <div
               key={collection.id}
-              className={`cursor-pointer ${
-                selectedCollections.includes(collection.id.toString())
-                  ? 'ring-2 ring-blue-500 dark:ring-blue-400 rounded-lg'
-                  : ''
-              }`}
-              onClick={(e: React.MouseEvent) => {
-                e.preventDefault();
-                e.stopPropagation();
-                // Navigate to collection detail page
-                if (!id || !collection.id) {
-                  console.error('Missing workspace ID or collection ID', { id, collectionId: collection.id });
-                  return;
-                }
-                const path = `/workspace/${id}/collections/${collection.id.toString()}/requests`;
-                console.log('Navigating to:', path);
-                navigate(path);
-              }}
+              className="relative"
             >
-              <Card
-                title={collection.name || 'Unnamed Collection'}
-                subtitle={collection.description || undefined}
-                className="hover:shadow-lg transition-shadow"
-              >
-              <div className="flex items-center gap-2 mb-2">
-                <input
-                  type="checkbox"
-                  checked={selectedCollections.includes(collection.id.toString())}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    e.stopPropagation();
-                    if (e.target.checked) {
-                      setSelectedCollections([...selectedCollections, collection.id.toString()]);
-                    } else {
-                      setSelectedCollections(selectedCollections.filter((id) => id !== collection.id.toString()));
-                    }
-                  }}
-                  className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <Folder size={18} className="text-blue-600 dark:text-blue-400" />
-              </div>
-              <div className="space-y-2">
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  {collection.requests?.length || 0} requests
-                </div>
-                <LiveCollaborators
-                  entityType="collection"
-                  entityId={collection.id.toString()}
-                  entityName={collection.name}
-                />
-                {permissions.canEdit && (
+              <input
+                type="checkbox"
+                checked={selectedCollections.includes(collection.id.toString())}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  handleCollectionSelect(collection.id.toString(), e.target.checked);
+                }}
+                className="absolute top-4 left-4 z-10 w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                onClick={(e) => e.stopPropagation()}
+              />
+              <CollectionCard
+                id={collection.id.toString()}
+                name={collection.name || 'Unnamed Collection'}
+                description={collection.description}
+                requestCount={collection.requests?.length || 0}
+                isSelected={selectedCollections.includes(collection.id.toString())}
+                onClick={() => handleCollectionClick(collection.id.toString())}
+                className={selectedCollections.includes(collection.id.toString()) ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''}
+              />
+              {permissions.canEdit && (
+                <div className="absolute bottom-4 right-4">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -351,18 +356,17 @@ export default function WorkspaceCollections() {
                       setSelectedCollection({ id: collection.id.toString(), name: collection.name });
                       setShowPermissionsModal(true);
                     }}
-                    className="w-full mt-2 flex items-center gap-2"
+                    className="flex items-center gap-1"
                   >
                     <Settings size={14} />
-                    Permissions
                   </Button>
-                )}
-              </div>
-              </Card>
+                </div>
+              )}
             </div>
           ))}
         </div>
       )}
+      </PageLayout>
 
       {/* Create Collection Modal */}
       {showCreateModal && (
@@ -381,7 +385,7 @@ export default function WorkspaceCollections() {
                   value={newCollectionName}
                   onChange={(e) => setNewCollectionName(e.target.value)}
                   placeholder="Enter collection name"
-                  className="w-full px-3 py-2 border-2 border-gray-400 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-600"
+                  className="w-full px-3 py-2 border border-gray-400 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-600"
                   autoFocus
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
@@ -405,9 +409,9 @@ export default function WorkspaceCollections() {
                 <Button
                   variant="primary"
                   onClick={handleCreateCollection}
-                  disabled={!newCollectionName.trim()}
+                  disabled={!newCollectionName.trim() || creating}
                 >
-                  Create
+                  {creating ? 'Đang tạo...' : 'Tạo'}
                 </Button>
               </div>
             </div>
@@ -427,6 +431,6 @@ export default function WorkspaceCollections() {
           collectionName={selectedCollection.name}
         />
       )}
-    </div>
+    </>
   );
 }

@@ -3,27 +3,38 @@
  * Layout wrapper với sidebar navigation cho workspace page
  */
 
-import { ReactNode, useState, useEffect } from 'react';
+import { ReactNode, useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
-import { useWorkspacePermission } from '../../hooks/useWorkspacePermission';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import WorkspaceHeader from './WorkspaceHeader';
 import WorkspaceBreadcrumb from '../Navigation/WorkspaceBreadcrumb';
 import CollaborationSidebar from './CollaborationSidebar';
-import Tooltip from '../UI/Tooltip';
+import NavItem from '../Navigation/NavItem';
+import NavCategory from '../Navigation/NavCategory';
+import WorkspaceLayoutWrapper from '../Layout/WorkspaceLayoutWrapper';
+import { layoutStyles } from '../../utils/layoutStyles';
+import { LucideIcon } from 'lucide-react';
 import { FolderOpen, Users, Activity, BarChart3, CheckSquare, MessageSquare, Settings, ClipboardCheck, FileCode, Code2, GitBranch, Server, TestTube, Layers, Eye } from 'lucide-react';
 
 interface WorkspaceLayoutProps {
   children: ReactNode;
 }
 
-interface NavItem {
+interface WorkspaceNavItem {
   id: string;
   label: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: LucideIcon;
   path: string;
   teamOnly?: boolean;
+}
+
+interface WorkspaceNavCategory {
+  id: string;
+  label: string;
+  items: WorkspaceNavItem[];
+  teamOnly?: boolean;
+  defaultExpanded?: boolean;
 }
 
 export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
@@ -31,8 +42,8 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { currentWorkspace, loadWorkspace } = useWorkspaceStore();
-  const permissions = useWorkspacePermission(currentWorkspace);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['core', 'collaboration']));
 
   // Load workspace if not loaded
   useEffect(() => {
@@ -43,136 +54,210 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
 
   if (!currentWorkspace) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className={layoutStyles.loadingContainer}>
         <div className="text-gray-500">Đang tải workspace...</div>
       </div>
     );
   }
 
-  const navItems: NavItem[] = [
+  // Tổ chức navigation theo categories
+  const navCategories: WorkspaceNavCategory[] = useMemo(() => [
     {
-      id: 'dashboard',
-      label: 'Dashboard',
-      icon: BarChart3,
-      path: `/workspace/${id}`,
-    },
-    {
-      id: 'collections',
-      label: 'Collections',
-      icon: FolderOpen,
-      path: `/workspace/${id}/collections`,
+      id: 'core',
+      label: 'Core',
+      defaultExpanded: true,
+      items: [
+        {
+          id: 'dashboard',
+          label: 'Dashboard',
+          icon: BarChart3,
+          path: `/workspace/${id}`,
+        },
+        {
+          id: 'collections',
+          label: 'Collections',
+          icon: FolderOpen,
+          path: `/workspace/${id}/collections`,
+        },
+      ],
     },
     ...(currentWorkspace.is_team
       ? [
           {
-            id: 'members',
-            label: 'Members',
-            icon: Users,
-            path: `/workspace/${id}/members`,
+            id: 'collaboration',
+            label: 'Collaboration',
             teamOnly: true,
+            defaultExpanded: true,
+            items: [
+              {
+                id: 'members',
+                label: 'Members',
+                icon: Users,
+                path: `/workspace/${id}/members`,
+                teamOnly: true,
+              },
+              {
+                id: 'tasks',
+                label: 'Tasks',
+                icon: CheckSquare,
+                path: `/workspace/${id}/tasks`,
+                teamOnly: true,
+              },
+              {
+                id: 'discussions',
+                label: 'Discussions',
+                icon: MessageSquare,
+                path: `/workspace/${id}/discussions`,
+                teamOnly: true,
+              },
+              {
+                id: 'reviews',
+                label: 'Reviews',
+                icon: ClipboardCheck,
+                path: `/workspace/${id}/reviews`,
+                teamOnly: true,
+              },
+              {
+                id: 'activity',
+                label: 'Activity',
+                icon: Activity,
+                path: `/workspace/${id}/activity`,
+                teamOnly: true,
+              },
+              {
+                id: 'live',
+                label: 'Live',
+                icon: Activity,
+                path: `/workspace/${id}/live`,
+                teamOnly: true,
+              },
+            ],
           },
           {
-            id: 'tasks',
-            label: 'Tasks',
-            icon: CheckSquare,
-            path: `/workspace/${id}/tasks`,
+            id: 'api-design',
+            label: 'API Design',
             teamOnly: true,
+            defaultExpanded: false,
+            items: [
+              {
+                id: 'api-schema',
+                label: 'Schema Editor',
+                icon: Code2,
+                path: `/workspace/${id}/api-schema`,
+                teamOnly: true,
+              },
+              {
+                id: 'api-versions',
+                label: 'API Versions',
+                icon: GitBranch,
+                path: `/workspace/${id}/api-versions`,
+                teamOnly: true,
+              },
+              {
+                id: 'design-reviews',
+                label: 'Design Reviews',
+                icon: Eye,
+                path: `/workspace/${id}/design-reviews`,
+                teamOnly: true,
+              },
+              {
+                id: 'documentation',
+                label: 'Documentation',
+                icon: FileCode,
+                path: `/workspace/${id}/documentation`,
+                teamOnly: true,
+              },
+            ],
           },
           {
-            id: 'discussions',
-            label: 'Discussions',
-            icon: MessageSquare,
-            path: `/workspace/${id}/discussions`,
+            id: 'testing',
+            label: 'Testing & Development',
             teamOnly: true,
-          },
-          {
-            id: 'reviews',
-            label: 'Reviews',
-            icon: ClipboardCheck,
-            path: `/workspace/${id}/reviews`,
-            teamOnly: true,
-          },
-          {
-            id: 'activity',
-            label: 'Activity',
-            icon: Activity,
-            path: `/workspace/${id}/activity`,
-            teamOnly: true,
-          },
-          {
-            id: 'live',
-            label: 'Live',
-            icon: Activity,
-            path: `/workspace/${id}/live`,
-            teamOnly: true,
+            defaultExpanded: false,
+            items: [
+              {
+                id: 'api-mocking',
+                label: 'Mock Servers',
+                icon: Server,
+                path: `/workspace/${id}/api-mocking`,
+                teamOnly: true,
+              },
+              {
+                id: 'api-testing',
+                label: 'Test Suites',
+                icon: TestTube,
+                path: `/workspace/${id}/api-testing`,
+                teamOnly: true,
+              },
+              {
+                id: 'api-templates',
+                label: 'Templates',
+                icon: Layers,
+                path: `/workspace/${id}/api-templates`,
+                teamOnly: true,
+              },
+            ],
           },
           {
             id: 'analytics',
             label: 'Analytics',
-            icon: BarChart3,
-            path: `/workspace/${id}/analytics`,
             teamOnly: true,
-          },
-          {
-            id: 'documentation',
-            label: 'Documentation',
-            icon: FileCode,
-            path: `/workspace/${id}/documentation`,
-            teamOnly: true,
-          },
-          {
-            id: 'api-schema',
-            label: 'Schema Editor',
-            icon: Code2,
-            path: `/workspace/${id}/api-schema`,
-            teamOnly: true,
-          },
-          {
-            id: 'api-versions',
-            label: 'API Versions',
-            icon: GitBranch,
-            path: `/workspace/${id}/api-versions`,
-            teamOnly: true,
-          },
-          {
-            id: 'api-mocking',
-            label: 'Mock Servers',
-            icon: Server,
-            path: `/workspace/${id}/api-mocking`,
-            teamOnly: true,
-          },
-          {
-            id: 'api-testing',
-            label: 'Test Suites',
-            icon: TestTube,
-            path: `/workspace/${id}/api-testing`,
-            teamOnly: true,
-          },
-          {
-            id: 'api-templates',
-            label: 'Templates',
-            icon: Layers,
-            path: `/workspace/${id}/api-templates`,
-            teamOnly: true,
-          },
-          {
-            id: 'design-reviews',
-            label: 'Design Reviews',
-            icon: Eye,
-            path: `/workspace/${id}/design-reviews`,
-            teamOnly: true,
+            defaultExpanded: false,
+            items: [
+              {
+                id: 'analytics',
+                label: 'Analytics',
+                icon: BarChart3,
+                path: `/workspace/${id}/analytics`,
+                teamOnly: true,
+              },
+            ],
           },
         ]
       : []),
     {
       id: 'settings',
       label: 'Settings',
-      icon: Settings,
-      path: `/workspace/${id}/settings`,
+      items: [
+        {
+          id: 'settings',
+          label: 'Settings',
+          icon: Settings,
+          path: `/workspace/${id}/settings`,
+        },
+      ],
     },
-  ];
+  ], [id, currentWorkspace.is_team]);
 
-  const activeNavId = navItems.find((item) => location.pathname === item.path)?.id || 'collections';
+  // Initialize expanded categories
+  useEffect(() => {
+    const initialExpanded = new Set<string>();
+    navCategories.forEach((category) => {
+      if (category.defaultExpanded) {
+        initialExpanded.add(category.id);
+      }
+    });
+    setExpandedCategories(initialExpanded);
+  }, [navCategories]);
+
+  const toggleCategory = useCallback((categoryId: string) => {
+    setExpandedCategories((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(categoryId)) {
+        newSet.delete(categoryId);
+      } else {
+        newSet.add(categoryId);
+      }
+      return newSet;
+    });
+  }, []);
+
+  // Flatten all items để tìm active item
+  const allNavItems = useMemo(() => navCategories.flatMap((cat) => cat.items), [navCategories]);
+  const activeNavId = useMemo(() => 
+    allNavItems.find((item) => location.pathname === item.path)?.id || 'collections',
+    [allNavItems, location.pathname]
+  );
 
   // Keyboard shortcuts cho navigation
   useKeyboardShortcuts([
@@ -200,55 +285,73 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
     },
   ]);
 
-  return (
-    <div className="flex flex-col h-screen bg-white dark:bg-gray-900">
-      <WorkspaceHeader workspace={currentWorkspace} />
-      <WorkspaceBreadcrumb />
-      
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar Navigation */}
-        <div className="w-64 bg-white dark:bg-gray-800 border-r-2 border-gray-300 dark:border-gray-700 flex flex-col">
-          <nav className="flex-1 p-4 space-y-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeNavId === item.id;
-              
-              return (
-                <Tooltip key={item.id} content={item.label} position="right">
-                  <button
-                    onClick={() => navigate(item.path)}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group relative ${
-                      isActive
-                        ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 font-semibold border-2 border-blue-500 dark:border-blue-400 shadow-sm'
-                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium'
-                    }`}
-                    title={item.label}
-                  >
-                    <Icon size={18} className={isActive ? 'text-blue-700 dark:text-blue-300' : ''} />
-                    <span>{item.label}</span>
-                    {isActive && (
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-600 dark:bg-blue-400 rounded-r-full" />
-                    )}
-                  </button>
-                </Tooltip>
-              );
-            })}
-          </nav>
-        </div>
+  // Render sidebar navigation
+  const renderSidebar = () => (
+    <nav className={layoutStyles.sidebarNav}>
+      {navCategories.map((category) => {
+        // Skip team-only categories if not team workspace
+        if (category.teamOnly && !currentWorkspace.is_team) {
+          return null;
+        }
 
-        {/* Main Content */}
-        <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900/30">
-          {children}
-        </div>
+        const isExpanded = expandedCategories.has(category.id);
+        const hasActiveItem = category.items.some((item) => item.id === activeNavId);
 
-        {/* Collaboration Sidebar - chỉ team workspace */}
-        {currentWorkspace.is_team && (
-          <CollaborationSidebar
-            collapsed={sidebarCollapsed}
-            onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+        // Render nav items
+        const navItems = category.items.map((item) => (
+          <NavItem
+            key={item.id}
+            id={item.id}
+            label={item.label}
+            icon={item.icon}
+            onClick={() => navigate(item.path)}
+            isActive={activeNavId === item.id}
+            showTooltip={true}
+            tooltipPosition="right"
           />
-        )}
-      </div>
-    </div>
+        ));
+
+        return (
+          <NavCategory
+            key={category.id}
+            id={category.id}
+            label={category.label}
+            items={navItems}
+            isExpanded={isExpanded}
+            onToggle={() => toggleCategory(category.id)}
+            hasActiveItem={hasActiveItem}
+            teamOnly={category.teamOnly}
+          />
+        );
+      })}
+    </nav>
+  );
+
+  // Render right sidebar (collaboration sidebar)
+  const renderRightSidebar = () => {
+    if (!currentWorkspace.is_team) return null;
+    
+    return (
+      <CollaborationSidebar
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+      />
+    );
+  };
+
+  return (
+    <WorkspaceLayoutWrapper
+      sidebar={renderSidebar()}
+      header={
+        <>
+          <WorkspaceHeader workspace={currentWorkspace} />
+          <WorkspaceBreadcrumb />
+        </>
+      }
+      rightSidebar={renderRightSidebar()}
+      contentClassName={layoutStyles.contentWithBg}
+    >
+      {children}
+    </WorkspaceLayoutWrapper>
   );
 }

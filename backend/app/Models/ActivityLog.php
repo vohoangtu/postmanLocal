@@ -10,7 +10,6 @@ class ActivityLog extends BaseModel
     use HasFactory;
 
     protected $fillable = [
-        'workspace_id',
         'user_id',
         'action',
         'entity_type',
@@ -22,10 +21,6 @@ class ActivityLog extends BaseModel
         'metadata' => 'array',
     ];
 
-    public function workspace(): BelongsTo
-    {
-        return $this->belongsTo(Workspace::class);
-    }
 
     public function user(): BelongsTo
     {

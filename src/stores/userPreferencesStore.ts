@@ -107,13 +107,34 @@ export const useUserPreferencesStore = create<UserPreferencesStore>((set, get) =
 
   applyTheme: () => {
     const { preferences } = get();
-    const theme = preferences.theme || 'auto';
+    const theme = preferences.theme || 'light';
     const root = document.documentElement;
 
-    if (theme === 'dark' || (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    // Xử lý theme 'auto' hoặc 'light'/'dark'
+    let shouldBeDark = false;
+    
+    if (theme === 'dark') {
+      shouldBeDark = true;
+    } else if (theme === 'auto') {
+      shouldBeDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    } else {
+      // theme === 'light'
+      shouldBeDark = false;
+    }
+
+    // Apply theme
+    if (shouldBeDark) {
       root.classList.add('dark');
     } else {
       root.classList.remove('dark');
+    }
+    
+    // Trigger storage event để sync giữa các tabs
+    try {
+      localStorage.setItem('theme', theme);
+      window.dispatchEvent(new Event('storage'));
+    } catch (e) {
+      // Ignore localStorage errors
     }
   },
 }));

@@ -47,7 +47,7 @@ export default function Tooltip({
 
   return (
     <div
-      className="relative inline-block"
+      className="relative d-block"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >

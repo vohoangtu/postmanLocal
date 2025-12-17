@@ -6,15 +6,22 @@
 import { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
-import { useActivityStore } from '../../stores/activityStore';
+import { useActivityStore, subscribeToActivities } from '../../stores/activityStore';
 import ActivityFeed from '../Activity/ActivityFeed';
-import { Activity, Loader2 } from 'lucide-react';
+import { Activity } from 'lucide-react';
 import EmptyState from '../EmptyStates/EmptyState';
+import Skeleton from '../UI/Skeleton';
+import ErrorMessage from '../Error/ErrorMessage';
 
 export default function WorkspaceActivity() {
   const { id } = useParams<{ id: string }>();
-  const { currentWorkspace, loadWorkspace, workspaceActivities, loadWorkspaceActivities } = useWorkspaceStore();
-  const { activities, setActivities } = useActivityStore();
+  const { currentWorkspace, loadWorkspace } = useWorkspaceStore();
+  const { 
+    activities, 
+    loadWorkspaceActivities, 
+    loading, 
+    error 
+  } = useActivityStore();
 
   useEffect(() => {
     if (id) {
@@ -23,11 +30,13 @@ export default function WorkspaceActivity() {
     }
   }, [id, loadWorkspace, loadWorkspaceActivities]);
 
+  // Subscribe to real-time activity updates
   useEffect(() => {
-    if (workspaceActivities.length > 0) {
-      setActivities(workspaceActivities);
-    }
-  }, [workspaceActivities, setActivities]);
+    if (!id) return;
+    
+    const unsubscribe = subscribeToActivities(id);
+    return unsubscribe;
+  }, [id]);
 
   if (!currentWorkspace || !currentWorkspace.is_team) {
     return (
@@ -50,7 +59,24 @@ export default function WorkspaceActivity() {
         </p>
       </div>
 
-      {activities.length === 0 ? (
+      {error && (
+        <div className="mb-4">
+          <ErrorMessage 
+            error={error} 
+            onRetry={() => id && loadWorkspaceActivities(id)}
+          />
+        </div>
+      )}
+
+      {loading ? (
+        <div className="space-y-4">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700 p-4">
+              <Skeleton variant="text" lines={2} />
+            </div>
+          ))}
+        </div>
+      ) : activities.length === 0 ? (
         <EmptyState
           icon={Activity}
           title="No activities yet"

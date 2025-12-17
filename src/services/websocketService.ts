@@ -22,6 +22,11 @@ class WebSocketService {
   private channels: Map<string, any> = new Map();
   private listeners: Map<string, Set<Function>> = new Map();
   private isConnected = false;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
+  private reconnectDelay = 1000; // Start with 1 second
+  private reconnectTimer: NodeJS.Timeout | null = null;
+  private isReconnecting = false;
 
   constructor() {
     // Dynamic import of Laravel Echo
@@ -50,11 +55,87 @@ class WebSocketService {
           },
         });
 
+        // Setup connection event listeners
+        this.setupConnectionListeners();
+        
         this.isConnected = true;
+        this.reconnectAttempts = 0;
+        this.log('info', 'WebSocket connected successfully');
+      } else {
+        this.log('warn', 'Laravel Echo not available');
+        this.isConnected = false;
       }
-    } catch (error) {
-      console.warn("WebSocket not available:", error);
+    } catch (error: any) {
+      this.log('error', 'Failed to initialize WebSocket', error);
       this.isConnected = false;
+      this.scheduleReconnect();
+    }
+  }
+
+  private setupConnectionListeners() {
+    if (!this.echo) return;
+
+    // Listen for connection events
+    if (this.echo.connector && this.echo.connector.socket) {
+      const socket = this.echo.connector.socket;
+      
+      socket.on('connect', () => {
+        this.log('info', 'WebSocket connection established');
+        this.isConnected = true;
+        this.reconnectAttempts = 0;
+        this.isReconnecting = false;
+      });
+
+      socket.on('disconnect', () => {
+        this.log('warn', 'WebSocket disconnected');
+        this.isConnected = false;
+        this.scheduleReconnect();
+      });
+
+      socket.on('error', (error: any) => {
+        this.log('error', 'WebSocket error', error);
+        this.isConnected = false;
+      });
+
+      socket.on('reconnect', () => {
+        this.log('info', 'WebSocket reconnected');
+        this.isConnected = true;
+        this.reconnectAttempts = 0;
+        this.isReconnecting = false;
+      });
+    }
+  }
+
+  private scheduleReconnect() {
+    if (this.isReconnecting || this.reconnectAttempts >= this.maxReconnectAttempts) {
+      if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+        this.log('error', `Max reconnection attempts (${this.maxReconnectAttempts}) reached`);
+      }
+      return;
+    }
+
+    this.isReconnecting = true;
+    this.reconnectAttempts++;
+    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1); // Exponential backoff
+
+    this.log('info', `Scheduling reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`);
+
+    this.reconnectTimer = setTimeout(() => {
+      this.log('info', `Attempting reconnection ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
+      this.initializeEcho();
+    }, delay);
+  }
+
+  private log(level: 'info' | 'warn' | 'error', message: string, error?: any) {
+    const timestamp = new Date().toISOString();
+    const logMessage = `[WebSocket ${timestamp}] ${message}`;
+    
+    if (level === 'error') {
+      console.error(logMessage, error || '');
+    } else if (level === 'warn') {
+      console.warn(logMessage);
+    } else {
+      console.log(logMessage);
     }
   }
 
@@ -158,19 +239,37 @@ class WebSocketService {
    * Disconnect from WebSocket
    */
   disconnect() {
+    this.log('info', 'Disconnecting WebSocket');
+    
+    // Clear reconnect timer
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    
     this.channels.forEach((channel, name) => {
-      if (channel && channel.unsubscribe) {
-        channel.unsubscribe();
+      try {
+        if (channel && channel.unsubscribe) {
+          channel.unsubscribe();
+        }
+      } catch (error: any) {
+        this.log('error', `Error unsubscribing from channel ${name}`, error);
       }
     });
     this.channels.clear();
     this.listeners.clear();
     
     if (this.echo && this.echo.disconnect) {
-      this.echo.disconnect();
+      try {
+        this.echo.disconnect();
+      } catch (error: any) {
+        this.log('error', 'Error disconnecting Echo', error);
+      }
     }
     
     this.isConnected = false;
+    this.isReconnecting = false;
+    this.reconnectAttempts = 0;
   }
 
   /**

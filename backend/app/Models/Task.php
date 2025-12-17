@@ -10,7 +10,6 @@ class Task extends BaseModel
     use HasFactory;
 
     protected $fillable = [
-        'workspace_id',
         'collection_id',
         'request_id',
         'title',
@@ -26,13 +25,6 @@ class Task extends BaseModel
         'due_date' => 'date',
     ];
 
-    /**
-     * Get the workspace
-     */
-    public function workspace(): BelongsTo
-    {
-        return $this->belongsTo(Workspace::class);
-    }
 
     /**
      * Get the collection

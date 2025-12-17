@@ -14,72 +14,107 @@ class CollectionController extends BaseController
 {
     public function index(Request $request)
     {
-        $cacheKey = $this->getUserCacheKey('collections', Auth::id());
-        
-        $collections = $this->cache($cacheKey, 300, function () use ($request) {
-            $query = Collection::where('user_id', Auth::id())
-                ->with(['user', 'workspace'])
-                ->orderBy('updated_at', 'desc');
-            
-            // Filter theo workspace_id nếu có
-            if ($request->has('workspace_id') && $request->workspace_id) {
-                $query->where('workspace_id', $request->workspace_id);
+        try {
+            $userId = Auth::id();
+            if (!$userId) {
+                return response()->json(['message' => 'Unauthorized'], 401);
             }
-            
-            // Pagination
-            if ($request->has('page') || $request->has('per_page')) {
-                return $this->paginate($query, $request);
-            }
-            
-            return $query->get();
-        });
 
-        return response()->json($collections);
+            $cacheKey = $this->getUserCacheKey('collections', $userId);
+            
+            $collections = $this->cache($cacheKey, 300, function () use ($request, $userId) {
+                try {
+                    $query = Collection::where('user_id', $userId)
+                        ->with('user')
+                        ->orderBy('updated_at', 'desc');
+                    
+                    // Chỉ load permissions nếu bảng tồn tại
+                    if (\Schema::hasTable('collection_permissions')) {
+                        $query->with([
+                            'permissions' => function ($query) {
+                                $query->with('user');
+                            }
+                        ]);
+                    }
+                    
+                    // Pagination
+                    if ($request->has('page') || $request->has('per_page')) {
+                        return $this->paginate($query, $request);
+                    }
+                    
+                    return $query->get();
+                } catch (\Exception $e) {
+                    // Fallback: load không có permissions nếu có lỗi
+                    \Log::warning('Error loading permissions in collections: ' . $e->getMessage());
+                    $query = Collection::where('user_id', $userId)
+                        ->with('user')
+                        ->orderBy('updated_at', 'desc');
+                    
+                    if ($request->has('page') || $request->has('per_page')) {
+                        return $this->paginate($query, $request);
+                    }
+                    
+                    return $query->get();
+                }
+            });
+
+            return response()->json($collections);
+        } catch (\Exception $e) {
+            \Log::error('Error fetching collections: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'message' => 'Error fetching collections',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
     }
 
     public function store(Request $request)
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'data' => 'nullable|array', // Chấp nhận array/object, Laravel sẽ tự động convert thành JSON
-            'workspace_id' => 'nullable|exists:workspaces,id',
-        ]);
-
-        // Kiểm tra workspace_id nếu có - user phải là owner hoặc member
-        if ($request->workspace_id) {
-            $workspace = \App\Models\Workspace::where('id', $request->workspace_id)
-                ->where(function ($query) {
-                    $query->where('owner_id', Auth::id())
-                        ->orWhereHas('teamMembers', function ($q) {
-                            $q->where('user_id', Auth::id());
-                        });
-                })
-                ->first();
-            
-            if (!$workspace) {
-                return response()->json(['message' => 'Workspace not found or access denied'], 403);
+        try {
+            $userId = Auth::id();
+            if (!$userId) {
+                return response()->json(['message' => 'Unauthorized'], 401);
             }
+
+            $request->validate([
+                'name' => 'required|string|max:255',
+                'description' => 'nullable|string',
+                'data' => 'nullable|array', // Chấp nhận array/object, Laravel sẽ tự động convert thành JSON
+            ]);
+
+            $collection = Collection::create([
+                'user_id' => $userId,
+                'name' => $request->name,
+                'description' => $request->description,
+                'data' => $request->data, // Laravel sẽ tự động cast thành JSON nhờ $casts trong Model
+            ]);
+
+            // Tự động set làm default nếu user chưa có default collection
+            $defaultCollection = Collection::getDefaultCollection($userId);
+            if (!$defaultCollection) {
+                $collection->setAsDefault();
+            }
+
+            // Invalidate cache
+            Cache::forget($this->getUserCacheKey('collections', $userId));
+
+            return response()->json($collection->load([
+                'user',
+                'permissions' => function ($query) {
+                    $query->with('user');
+                }
+            ]), 201);
+        } catch (\Exception $e) {
+            \Log::error('Error creating collection: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'message' => 'Error creating collection',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
         }
-
-        $collection = Collection::create([
-            'user_id' => Auth::id(),
-            'name' => $request->name,
-            'description' => $request->description,
-            'data' => $request->data, // Laravel sẽ tự động cast thành JSON nhờ $casts trong Model
-            'workspace_id' => $request->workspace_id,
-        ]);
-
-        // Tự động set làm default nếu user chưa có default collection
-        $defaultCollection = Collection::getDefaultCollection(Auth::id());
-        if (!$defaultCollection) {
-            $collection->setAsDefault();
-        }
-
-        // Invalidate cache
-        Cache::forget($this->getUserCacheKey('collections', Auth::id()));
-
-        return response()->json($collection->load(['user', 'workspace']), 201);
     }
 
     public function show($id)
@@ -88,7 +123,14 @@ class CollectionController extends BaseController
             ->orWhereHas('shares', function ($query) {
                 $query->where('shared_with_user_id', Auth::id());
             })
-            ->with(['shares.sharedWithUser', 'shares.sharedBy', 'user', 'workspace'])
+            ->with([
+                'shares.sharedWithUser',
+                'shares.sharedBy',
+                'user',
+                'permissions' => function ($query) {
+                    $query->with('user');
+                }
+            ])
             ->findOrFail($id);
         return response()->json($collection);
     }
@@ -109,7 +151,12 @@ class CollectionController extends BaseController
         // Invalidate cache
         Cache::forget($this->getUserCacheKey('collections', Auth::id()));
 
-        return response()->json($collection->load(['user', 'workspace']));
+        return response()->json($collection->load([
+            'user',
+            'permissions' => function ($query) {
+                $query->with('user');
+            }
+        ]));
     }
 
     public function destroy($id)
@@ -198,7 +245,13 @@ class CollectionController extends BaseController
             $query = Collection::whereHas('shares', function ($query) {
                 $query->where('shared_with_user_id', Auth::id());
             })
-            ->with(['user', 'shares.sharedWithUser', 'workspace'])
+            ->with([
+                'user',
+                'shares.sharedWithUser',
+                'permissions' => function ($query) {
+                    $query->with('user');
+                }
+            ])
             ->orderBy('updated_at', 'desc');
             
             // Pagination
@@ -377,7 +430,12 @@ class CollectionController extends BaseController
             ], 404);
         }
 
-        return response()->json($defaultCollection->load(['user', 'workspace']));
+        return response()->json($defaultCollection->load([
+            'user',
+            'permissions' => function ($query) {
+                $query->with('user');
+            }
+        ]));
     }
 
     /**
@@ -395,25 +453,28 @@ class CollectionController extends BaseController
 
         return response()->json([
             'message' => 'Collection set as default successfully',
-            'collection' => $collection->load(['user', 'workspace']),
+            'collection' => $collection->load([
+                'user',
+                'permissions' => function ($query) {
+                    $query->with('user');
+                }
+            ]),
         ]);
     }
 
     /**
-     * Get workspace templates
+     * Get templates (all user templates)
      */
-    public function getWorkspaceTemplates(Request $request, string $workspaceId)
+    public function getTemplates(Request $request)
     {
-        // Check if user has access to workspace
-        $workspace = \App\Models\Workspace::where('owner_id', Auth::id())
-            ->orWhereHas('teamMembers', function ($query) {
-                $query->where('user_id', Auth::id());
-            })
-            ->findOrFail($workspaceId);
-
-        $query = Collection::where('workspace_id', $workspaceId)
+        $query = Collection::where('user_id', Auth::id())
             ->where('is_template', true)
-            ->with(['user', 'workspace'])
+            ->with([
+                'user',
+                'permissions' => function ($query) {
+                    $query->with('user');
+                }
+            ])
             ->orderBy('updated_at', 'desc');
 
         // Filter by category

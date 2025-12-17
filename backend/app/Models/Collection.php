@@ -10,7 +10,6 @@ class Collection extends BaseModel
 
     protected $fillable = [
         'user_id',
-        'workspace_id',
         'name',
         'description',
         'data',
@@ -35,10 +34,6 @@ class Collection extends BaseModel
         return $this->belongsTo(User::class);
     }
 
-    public function workspace()
-    {
-        return $this->belongsTo(Workspace::class);
-    }
 
     public function shares()
     {
@@ -56,11 +51,11 @@ class Collection extends BaseModel
     }
 
     /**
-     * Get workspace permissions for this collection
+     * Get permissions for this collection
      */
-    public function workspacePermissions()
+    public function permissions()
     {
-        return $this->hasMany(CollectionWorkspacePermission::class);
+        return $this->hasMany(CollectionPermission::class);
     }
 
     /**

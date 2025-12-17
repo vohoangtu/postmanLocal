@@ -6,6 +6,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { NavigationProvider } from '../contexts/NavigationContext';
 import AuthGuard from './Auth/AuthGuard';
 import ProtectedRoute from './Auth/ProtectedRoute';
 import MainApp from './MainApp';
@@ -13,7 +14,7 @@ import GlobalNavBar from './Navigation/GlobalNavBar';
 
 // Lazy load components
 const AdminRoutes = lazy(() => import('../routes/AdminRoutes'));
-const WorkspaceRoutes = lazy(() => import('../routes/WorkspaceRoutes'));
+const CollectionRoutes = lazy(() => import('../routes/CollectionRoutes'));
 const UserPanel = lazy(() => import('./User/UserPanel'));
 const Login = lazy(() => import('./Auth/Login'));
 const Register = lazy(() => import('./Auth/Register'));
@@ -32,7 +33,7 @@ export default function AppRouter() {
   }
 
   return (
-    <>
+    <NavigationProvider>
       <GlobalNavBar />
       <Routes>
         {/* Public routes */}
@@ -107,13 +108,13 @@ export default function AppRouter() {
         }
       />
 
-      {/* Workspace routes */}
+      {/* Collection routes */}
       <Route
-        path="/workspace/*"
+        path="/collections/*"
         element={
           <ProtectedRoute>
-            <Suspense fallback={<div className="flex items-center justify-center h-screen">Đang tải workspace...</div>}>
-              <WorkspaceRoutes />
+            <Suspense fallback={<div className="flex items-center justify-center h-screen">Đang tải collection...</div>}>
+              <CollectionRoutes />
             </Suspense>
           </ProtectedRoute>
         }
@@ -134,6 +135,6 @@ export default function AppRouter() {
         {/* Catch all - redirect to home */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </>
+    </NavigationProvider>
   );
 }

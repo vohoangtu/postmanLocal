@@ -3,7 +3,7 @@
  * Hiển thị danh sách requests trong collection với khả năng add/edit/delete
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCollectionStore, Request } from '../../stores/collectionStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
@@ -17,6 +17,9 @@ import Card from '../UI/Card';
 import Input from '../UI/Input';
 import Badge from '../UI/Badge';
 import EmptyState from '../EmptyStates/EmptyState';
+import PageLayout from '../Layout/PageLayout';
+import PageToolbar from '../Layout/PageToolbar';
+import FolderManager from '../Folders/FolderManager';
 import {
   Plus,
   Edit2,
@@ -80,15 +83,17 @@ export default function CollectionRequestsView() {
     loadCollection();
   }, [collectionId, reloadTrigger, updateCollection]);
 
-  const filteredRequests = requests.filter((request) => {
-    if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      request.name.toLowerCase().includes(query) ||
-      request.url.toLowerCase().includes(query) ||
-      request.method.toLowerCase().includes(query)
-    );
-  });
+  const filteredRequests = useMemo(() => {
+    return requests.filter((request) => {
+      if (!searchQuery) return true;
+      const query = searchQuery.toLowerCase();
+      return (
+        request.name.toLowerCase().includes(query) ||
+        request.url.toLowerCase().includes(query) ||
+        request.method.toLowerCase().includes(query)
+      );
+    });
+  }, [requests, searchQuery]);
 
   const handleNewRequest = () => {
     if (!collectionId) return;
@@ -145,7 +150,7 @@ export default function CollectionRequestsView() {
     }
   };
 
-  const getMethodBadgeVariant = (method: string) => {
+  const getMethodBadgeVariant = useCallback((method: string) => {
     const upperMethod = method.toUpperCase();
     switch (upperMethod) {
       case 'GET':
@@ -160,7 +165,52 @@ export default function CollectionRequestsView() {
       default:
         return 'gray';
     }
-  };
+  }, []);
+
+  const renderToolbar = useCallback(() => {
+    return (
+      <PageToolbar
+        leftSection={
+          <>
+            <FileCode size={20} className="text-gray-600 dark:text-gray-400" />
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                Requests
+              </h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {collection?.name ? `${filteredRequests.length} request${filteredRequests.length !== 1 ? 's' : ''} in ${collection.name}` : 'Manage API requests'}
+              </p>
+            </div>
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+              <Input
+                type="text"
+                placeholder="Search requests..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+                fullWidth
+              />
+            </div>
+          </>
+        }
+        rightSection={
+          permissions.canEdit && (
+            <Button
+              variant="primary"
+              onClick={handleNewRequest}
+              className="flex items-center gap-2"
+            >
+              <Plus size={16} />
+              New Request
+            </Button>
+          )
+        }
+      >
+        {/* Toolbar content */}
+      </PageToolbar>
+    );
+  }, [collection?.name, filteredRequests.length, searchQuery, permissions.canEdit, handleNewRequest]);
 
   if (!collection) {
     return (
@@ -173,118 +223,33 @@ export default function CollectionRequestsView() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header Actions */}
-      <div className="flex items-center justify-between">
-        <div className="flex-1 max-w-md">
-          <Input
-            type="text"
-            placeholder="Search requests..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            icon={Search}
+    <>
+      <PageLayout toolbar={renderToolbar()}>
+        {/* Requests List */}
+        {filteredRequests.length === 0 ? (
+          <EmptyState
+            icon={FileCode}
+            title={searchQuery ? 'No requests found' : 'No requests yet'}
+            description={
+              searchQuery
+                ? 'Try adjusting your search query'
+                : 'Create your first request to get started'
+            }
+            action={
+              permissions.canEdit && !searchQuery
+                ? {
+                    label: 'Create Request',
+                    onClick: handleNewRequest,
+                  }
+                : undefined
+            }
           />
-        </div>
-        {permissions.canEdit && (
-          <Button
-            variant="primary"
-            onClick={handleNewRequest}
-            className="flex items-center gap-2"
-          >
-            <Plus size={16} />
-            New Request
-          </Button>
+        ) : (
+          <div className="h-full overflow-y-auto overflow-x-hidden">
+            <FolderManager collectionId={collectionId || undefined} />
+          </div>
         )}
-      </div>
-
-      {/* Requests List */}
-      {filteredRequests.length === 0 ? (
-        <EmptyState
-          icon={FileCode}
-          title={searchQuery ? 'No requests found' : 'No requests yet'}
-          description={
-            searchQuery
-              ? 'Try adjusting your search query'
-              : 'Create your first request to get started'
-          }
-          action={
-            permissions.canEdit && !searchQuery
-              ? {
-                  label: 'Create Request',
-                  onClick: handleNewRequest,
-                }
-              : undefined
-          }
-        />
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredRequests.map((request) => (
-            <Card
-              key={request.id}
-              title={
-                <div className="flex items-center gap-2">
-                  <Badge variant={getMethodBadgeVariant(request.method)} size="sm">
-                    {request.method}
-                  </Badge>
-                  <span className="font-semibold truncate">{request.name}</span>
-                </div>
-              }
-              className="hover:shadow-lg transition-shadow cursor-pointer"
-              onClick={() => handleEditRequest(request.id)}
-            >
-              <div className="space-y-3">
-                <div className="text-sm text-gray-600 dark:text-gray-400 break-all">
-                  <code className="text-xs bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">
-                    {request.url}
-                  </code>
-                </div>
-                <div className="flex items-center gap-2 pt-2 border-t-2 border-gray-200 dark:border-gray-700">
-                  {permissions.canEdit && (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEditRequest(request.id);
-                        }}
-                        className="flex items-center gap-1"
-                      >
-                        <Edit2 size={12} />
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDuplicateRequest(request);
-                        }}
-                        className="flex items-center gap-1"
-                      >
-                        <Copy size={12} />
-                        Duplicate
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowDeleteConfirm(request.id);
-                        }}
-                        className="flex items-center gap-1 text-red-600 dark:text-red-400"
-                      >
-                        <Trash2 size={12} />
-                        Delete
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
+      </PageLayout>
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (

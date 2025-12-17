@@ -4,28 +4,10 @@ import {
   updateRequestInCollection as updateRequestInCollectionBackend,
   removeRequestFromCollection as removeRequestFromCollectionBackend
 } from '../services/collectionService';
+import type { Collection, Request } from '../types/workspace';
 
-export interface Request {
-  id: string;
-  name: string;
-  method: string;
-  url: string;
-  headers?: Record<string, string>;
-  body?: string;
-  queryParams?: Array<{ key: string; value: string; enabled: boolean }>;
-  folderId?: string;
-}
-
-interface Collection {
-  id: string;
-  name: string;
-  description?: string;
-  requests: Request[];
-  is_shared?: boolean;
-  permission?: "read" | "write" | "admin";
-  workspace_id?: string;
-  is_default?: boolean;
-}
+// Re-export types for backward compatibility
+export type { Collection, Request } from '../types/workspace';
 
 interface CollectionStore {
   collections: Collection[];

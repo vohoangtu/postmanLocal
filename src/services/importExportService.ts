@@ -450,7 +450,34 @@ export async function importCollectionsToWorkspace(
 
     // Check if it's Postman collection format
     if (parsedData.info && parsedData.item) {
+      console.log('Detected Postman collection format');
       const { collection, requests } = importPostmanCollection(parsedData);
+      console.log('Parsed collection:', { name: collection.name, requestsCount: requests.length });
+      
+      // Prepare data for backend - ensure requests array is properly formatted
+      const collectionData = {
+        name: collection.name,
+        description: collection.description || undefined,
+        workspace_id: workspaceId,
+        data: {
+          requests: requests.map(req => ({
+            id: req.id,
+            name: req.name,
+            method: req.method,
+            url: req.url,
+            headers: req.headers || {},
+            body: req.body || undefined,
+            queryParams: req.queryParams || [],
+            folderId: req.folderId || undefined,
+          })),
+        },
+      };
+      
+      console.log('Sending to API:', { 
+        name: collectionData.name, 
+        workspace_id: collectionData.workspace_id,
+        requestsCount: collectionData.data.requests.length 
+      });
       
       // Create collection in workspace via API
       const response = await fetch(
@@ -461,17 +488,15 @@ export async function importCollectionsToWorkspace(
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({
-            name: collection.name,
-            description: collection.description,
-            workspace_id: workspaceId,
-            data: { requests },
-          }),
+          body: JSON.stringify(collectionData),
         }
       );
 
+      console.log('API Response status:', response.status);
+
       if (response.ok) {
         const createdCollection = await response.json();
+        console.log('Collection created successfully:', createdCollection);
         collections.push({
           id: createdCollection.id.toString(),
           name: createdCollection.name,
@@ -480,8 +505,16 @@ export async function importCollectionsToWorkspace(
           workspace_id: workspaceId,
         });
       } else {
-        const error = await response.json();
-        errors.push(`Failed to import "${collection.name}": ${error.message || 'Unknown error'}`);
+        let errorMessage = 'Unknown error';
+        try {
+          const errorData = await response.json();
+          console.error('API Error response:', errorData);
+          errorMessage = errorData.message || errorData.error || response.statusText;
+        } catch (e) {
+          console.error('Failed to parse error response:', e);
+          errorMessage = response.statusText || `HTTP ${response.status}`;
+        }
+        errors.push(`Không thể import "${collection.name}": ${errorMessage}`);
       }
     } 
     // Check if it's OpenAPI format
@@ -515,8 +548,14 @@ export async function importCollectionsToWorkspace(
           workspace_id: workspaceId,
         });
       } else {
-        const error = await response.json();
-        errors.push(`Failed to import "${collection.name}": ${error.message || 'Unknown error'}`);
+        let errorMessage = 'Unknown error';
+        try {
+          const error = await response.json();
+          errorMessage = error.message || error.error || response.statusText;
+        } catch {
+          errorMessage = response.statusText || `HTTP ${response.status}`;
+        }
+        errors.push(`Không thể import "${collection.name}": ${errorMessage}`);
       }
     }
     // Check if it's array of collections (bulk import)
@@ -550,19 +589,46 @@ export async function importCollectionsToWorkspace(
               workspace_id: workspaceId,
             });
           } else {
-            const error = await response.json();
-            errors.push(`Failed to import "${collectionData.name}": ${error.message || 'Unknown error'}`);
+            let errorMessage = 'Unknown error';
+            try {
+              const error = await response.json();
+              errorMessage = error.message || error.error || response.statusText;
+            } catch {
+              errorMessage = response.statusText || `HTTP ${response.status}`;
+            }
+            errors.push(`Không thể import "${collectionData.name || 'Collection'}": ${errorMessage}`);
           }
         } catch (error: any) {
           errors.push(`Error importing collection: ${error.message}`);
         }
       }
     } else {
-      throw new Error('Unsupported file format');
+      // Kiểm tra xem có phải là Postman collection nhưng thiếu info hoặc item không
+      if (parsedData.item && !parsedData.info) {
+        errors.push('File Postman Collection thiếu thông tin (info). Vui lòng kiểm tra lại file.');
+      } else if (parsedData.info && !parsedData.item) {
+        errors.push('File Postman Collection không có items. Vui lòng kiểm tra lại file.');
+      } else {
+        errors.push('Định dạng file không được hỗ trợ. Vui lòng sử dụng file Postman Collection (JSON) hoặc OpenAPI specification.');
+      }
     }
   } catch (error: any) {
-    errors.push(`Failed to parse file: ${error.message}`);
+    console.error('Error parsing file:', error);
+    const errorMessage = error.message || 'Lỗi không xác định khi parse file';
+    errors.push(`Lỗi khi parse file: ${errorMessage}`);
   }
+
+  // Nếu có lỗi và không có collection nào được import thành công, throw error
+  if (errors.length > 0 && collections.length === 0) {
+    const errorMessage = errors.join('; ');
+    console.error('Import failed:', errorMessage);
+    throw new Error(errorMessage);
+  }
+
+  console.log('Import completed:', { 
+    collectionsImported: collections.length, 
+    errors: errors.length 
+  });
 
   return { collections, errors };
 }

@@ -81,7 +81,7 @@ export default function DiscussionThread({ discussion, onClose }: DiscussionThre
   const canDelete = permissions.canEdit || discussion.created_by === user?.id;
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg border-2 border-gray-300 dark:border-gray-700 p-6 shadow-sm">
+    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700 p-6 shadow-sm">
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
@@ -191,7 +191,7 @@ export default function DiscussionThread({ discussion, onClose }: DiscussionThre
               onChange={(e) => setReplyContent(e.target.value)}
               placeholder="Write a reply..."
               rows={3}
-              className="w-full px-3 py-2 border-2 border-gray-400 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-600 resize-none"
+              className="w-full px-3 py-2 border border-gray-400 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-600 resize-none"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                   handleAddReply();

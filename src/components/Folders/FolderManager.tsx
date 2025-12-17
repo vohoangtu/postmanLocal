@@ -1,10 +1,11 @@
 import { useState, useMemo } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import Button from "../UI/Button";
 import Select from "../UI/Select";
 import { useCollectionStore } from "../../stores/collectionStore";
 import { useTabStore } from "../../stores/tabStore";
 import { useEnvironmentStore } from "../../stores/environmentStore";
-import { Play, Folder as FolderIcon } from "lucide-react";
+import { Play, Folder as FolderIcon, ChevronDown, ChevronRight } from "lucide-react";
 
 interface Folder {
   id: string;
@@ -25,9 +26,13 @@ export default function FolderManager({ collectionId }: FolderManagerProps) {
   const { collections, selectedCollection } = useCollectionStore();
   const { addTab } = useTabStore();
   const { activeEnvironment, environments, setActiveEnvironment } = useEnvironmentStore();
+  const navigate = useNavigate();
+  const params = useParams<{ id?: string; collectionId?: string }>();
+  const workspaceId = params.id;
   const [folders, setFolders] = useState<Folder[]>([]);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   
   // Lấy collection hiện tại
   const currentCollection = useMemo(() => {
@@ -41,10 +46,17 @@ export default function FolderManager({ collectionId }: FolderManagerProps) {
     return currentCollection.requests.filter(r => !r.folderId);
   }, [currentCollection]);
 
-  // Xử lý click vào request để mở trong tab mới
+  // Xử lý click vào request để mở trong tab mới hoặc navigate đến request builder
   const handleRequestClick = (request: any) => {
     if (!currentCollection) return;
     
+    // Nếu có workspaceId và collectionId trong URL, navigate đến request builder
+    if (workspaceId && collectionId) {
+      navigate(`/workspace/${workspaceId}/collections/${collectionId}/requests/${request.id}`);
+      return;
+    }
+    
+    // Nếu không có workspace context, mở trong tab mới (fallback behavior)
     // Chuyển đổi headers từ object sang array format (deep copy để tránh reference sharing)
     const headersArray = request.headers 
       ? Object.entries(request.headers).map(([key, value]) => ({
@@ -98,6 +110,18 @@ export default function FolderManager({ collectionId }: FolderManagerProps) {
     }
   };
 
+  const toggleFolder = (folderId: string) => {
+    setExpandedFolders((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(folderId)) {
+        newSet.delete(folderId);
+      } else {
+        newSet.add(folderId);
+      }
+      return newSet;
+    });
+  };
+
   // Nhóm requests theo folder
   const requestsByFolder = useMemo(() => {
     if (!currentCollection) return {};
@@ -147,7 +171,7 @@ export default function FolderManager({ collectionId }: FolderManagerProps) {
   }
 
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-2.5 overflow-y-auto overflow-x-hidden h-full">
       <div className="flex items-center justify-between gap-2 pb-2 border-b border-gray-200 dark:border-gray-700">
         <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300">
           Requests ({currentCollection.requests.length})
@@ -215,11 +239,20 @@ export default function FolderManager({ collectionId }: FolderManagerProps) {
           {folderIdsFromRequests.map((folderId) => {
             const folderRequests = requestsByFolder[folderId] || [];
             if (folderRequests.length === 0) return null;
+            const isExpanded = expandedFolders.has(folderId);
             
             return (
               <div key={folderId} className="space-y-1">
-                <div className="group flex items-center justify-between p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+                <div 
+                  className="group flex items-center justify-between p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
+                  onClick={() => toggleFolder(folderId)}
+                >
                   <div className="flex items-center gap-2 flex-1">
+                    {isExpanded ? (
+                      <ChevronDown size={14} className="text-gray-500" />
+                    ) : (
+                      <ChevronRight size={14} className="text-gray-500" />
+                    )}
                     <FolderIcon size={14} className="text-gray-500" />
                     <span className="text-xs font-semibold text-gray-800 dark:text-gray-200">
                       Folder {folderId}
@@ -229,23 +262,28 @@ export default function FolderManager({ collectionId }: FolderManagerProps) {
                     </span>
                   </div>
                 </div>
-                <div className="ml-4 space-y-1">
-                  {folderRequests.map((request) => (
-                    <div
-                      key={request.id}
-              onClick={() => handleRequestClick(request)}
-              className="group flex items-center gap-2 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors"
-                    >
-                      <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                        {request.method}
-                      </span>
-                      <span className="text-xs text-gray-700 dark:text-gray-300 flex-1 truncate">
-                        {request.name || 'Untitled Request'}
-                      </span>
-                      <Play size={12} className="opacity-0 group-hover:opacity-100 text-gray-400" />
-                    </div>
-                  ))}
-                </div>
+                {isExpanded && (
+                  <div className="ml-4 space-y-1">
+                    {folderRequests.map((request) => (
+                      <div
+                        key={request.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRequestClick(request);
+                        }}
+                        className="group flex items-center gap-2 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+                      >
+                        <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                          {request.method}
+                        </span>
+                        <span className="text-xs text-gray-700 dark:text-gray-300 flex-1 truncate">
+                          {request.name || 'Untitled Request'}
+                        </span>
+                        <Play size={12} className="opacity-0 group-hover:opacity-100 text-gray-400" />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -258,11 +296,20 @@ export default function FolderManager({ collectionId }: FolderManagerProps) {
           {folders.map((folder) => {
             const folderRequests = requestsByFolder[folder.id] || [];
             if (folderRequests.length === 0) return null;
+            const isExpanded = expandedFolders.has(folder.id);
             
             return (
               <div key={folder.id} className="space-y-1">
-                <div className="group flex items-center justify-between p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+                <div 
+                  className="group flex items-center justify-between p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
+                  onClick={() => toggleFolder(folder.id)}
+                >
                   <div className="flex items-center gap-2 flex-1">
+                    {isExpanded ? (
+                      <ChevronDown size={14} className="text-gray-500" />
+                    ) : (
+                      <ChevronRight size={14} className="text-gray-500" />
+                    )}
                     <FolderIcon size={14} className="text-gray-500" />
                     <span className="text-xs text-gray-700 dark:text-gray-300">{folder.name}</span>
                     <span className="text-xs text-gray-500 dark:text-gray-500">
@@ -270,29 +317,37 @@ export default function FolderManager({ collectionId }: FolderManagerProps) {
                     </span>
                   </div>
                   <button
-                    onClick={() => handleDeleteFolder(folder.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteFolder(folder.id);
+                    }}
                     className="opacity-0 group-hover:opacity-100 text-red-600 dark:text-red-400 text-xs"
                   >
                     ×
                   </button>
                 </div>
-                <div className="ml-4 space-y-1">
-                  {folderRequests.map((request) => (
-                    <div
-                      key={request.id}
-              onClick={() => handleRequestClick(request)}
-              className="group flex items-center gap-2 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors"
-                    >
-                      <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                        {request.method}
-                      </span>
-                      <span className="text-xs text-gray-700 dark:text-gray-300 flex-1 truncate">
-                        {request.name || 'Untitled Request'}
-                      </span>
-                      <Play size={12} className="opacity-0 group-hover:opacity-100 text-gray-400" />
-                    </div>
-                  ))}
-                </div>
+                {isExpanded && (
+                  <div className="ml-4 space-y-1">
+                    {folderRequests.map((request) => (
+                      <div
+                        key={request.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRequestClick(request);
+                        }}
+                        className="group flex items-center gap-2 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+                      >
+                        <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                          {request.method}
+                        </span>
+                        <span className="text-xs text-gray-700 dark:text-gray-300 flex-1 truncate">
+                          {request.name || 'Untitled Request'}
+                        </span>
+                        <Play size={12} className="opacity-0 group-hover:opacity-100 text-gray-400" />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}

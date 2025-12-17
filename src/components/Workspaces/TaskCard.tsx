@@ -106,7 +106,7 @@ export default function TaskCard({ task, onEdit }: TaskCardProps) {
   const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'done';
 
   return (
-    <div className={`bg-white dark:bg-gray-800 rounded-lg border-2 ${
+    <div className={`bg-white dark:bg-gray-800 rounded-lg border ${
       isOverdue ? 'border-red-300 dark:border-red-700' : 'border-gray-300 dark:border-gray-700'
     } p-4 shadow-sm hover:shadow-md transition-shadow`}>
       <div className="flex items-start justify-between mb-2">

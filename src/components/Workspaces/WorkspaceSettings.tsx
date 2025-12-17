@@ -516,7 +516,7 @@ export default function WorkspaceSettings() {
                   <input
                     type="text"
                     placeholder={currentWorkspace.name}
-                    className="flex-1 px-3 py-2 border-2 border-red-300 dark:border-red-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                    className="flex-1 px-3 py-2 border border-red-300 dark:border-red-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                     onKeyDown={(e) => {
                       if (e.key === 'Escape') {
                         setShowDeleteConfirm(false);

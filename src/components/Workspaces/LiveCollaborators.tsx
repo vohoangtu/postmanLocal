@@ -68,7 +68,7 @@ export default function LiveCollaborators({
           {collaborators.slice(0, 3).map((collaborator) => (
             <div
               key={collaborator.id}
-              className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-medium border-2 border-white dark:border-gray-800"
+              className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-medium border border-white dark:border-gray-800"
               title={collaborator.name || collaborator.email || 'User'}
             >
               {collaborator.name?.charAt(0).toUpperCase() || 'U'}

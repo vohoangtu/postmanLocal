@@ -1,112 +1,85 @@
 /**
  * Workspace Notifications Component
- * Filter và hiển thị notifications cho workspace
+ * Hiển thị notifications cho workspace với real-time updates
  */
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
-import { authService } from '../../services/authService';
-import { Bell, CheckCircle2, Circle, X } from 'lucide-react';
-import EmptyState from '../EmptyStates/EmptyState';
+import { useNotificationStore, subscribeToNotifications } from '../../stores/notificationStore';
+import { useToast } from '../../hooks/useToast';
 import Button from '../UI/Button';
-
-interface Notification {
-  id: string;
-  type: string;
-  message: string;
-  data?: any;
-  read: boolean;
-  created_at: string;
-}
+import Badge from '../UI/Badge';
+import EmptyState from '../EmptyStates/EmptyState';
+import Skeleton from '../UI/Skeleton';
+import ErrorMessage from '../Error/ErrorMessage';
+import { Bell, Check, CheckCheck, AlertCircle, Info, CheckCircle2, XCircle } from 'lucide-react';
 
 export default function WorkspaceNotifications() {
   const { id } = useParams<{ id: string }>();
   const { currentWorkspace, loadWorkspace } = useWorkspaceStore();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(false);
+  const {
+    notifications,
+    unreadNotifications,
+    loading,
+    error,
+    loadNotifications,
+    loadUnreadNotifications,
+    markAsRead,
+    markAllAsRead,
+  } = useNotificationStore();
+  const toast = useToast();
+  const [markingAsRead, setMarkingAsRead] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) {
       loadWorkspace(id);
       loadNotifications();
+      loadUnreadNotifications();
     }
-  }, [id, loadWorkspace]);
+  }, [id, loadWorkspace, loadNotifications, loadUnreadNotifications]);
 
-  const loadNotifications = async () => {
+  // Subscribe to real-time notification updates
+  useEffect(() => {
     if (!id) return;
-    setLoading(true);
+    
+    const unsubscribe = subscribeToNotifications(id);
+    return unsubscribe;
+  }, [id]);
+
+  const handleMarkAsRead = async (notificationId: string) => {
+    setMarkingAsRead(notificationId);
     try {
-      const token = await authService.getAccessToken();
-      if (!token) return;
-
-      const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"}/notifications?workspace_id=${id}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        const notifs = Array.isArray(data) ? data : (data.data || []);
-        setNotifications(notifs);
-      }
-    } catch (error) {
-      console.error('Failed to load notifications:', error);
+      await markAsRead(notificationId);
+      toast.success('Notification marked as read');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to mark notification as read');
     } finally {
-      setLoading(false);
+      setMarkingAsRead(null);
     }
   };
 
-  const handleMarkAsRead = async (notificationId: string) => {
+  const handleMarkAllAsRead = async () => {
     try {
-      const token = await authService.getAccessToken();
-      if (!token) return;
-
-      const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"}/notifications/${notificationId}/read`,
-        {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (response.ok) {
-        setNotifications((prev) =>
-          prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
-        );
-      }
-    } catch (error) {
-      console.error('Failed to mark notification as read:', error);
+      await markAllAsRead();
+      toast.success('All notifications marked as read');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to mark all notifications as read');
     }
   };
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
-      case 'task_assigned':
-      case 'task_completed':
-        return <CheckCircle2 size={16} className="text-blue-600 dark:text-blue-400" />;
-      case 'discussion_reply':
-      case 'mention':
-        return <Bell size={16} className="text-yellow-600 dark:text-yellow-400" />;
+      case 'success':
+        return <CheckCircle2 size={18} className="text-green-600 dark:text-green-400" />;
+      case 'error':
+        return <XCircle size={18} className="text-red-600 dark:text-red-400" />;
+      case 'warning':
+        return <AlertCircle size={18} className="text-orange-600 dark:text-orange-400" />;
       default:
-        return <Bell size={16} className="text-gray-600 dark:text-gray-400" />;
+        return <Info size={18} className="text-blue-600 dark:text-blue-400" />;
     }
   };
-
-  const workspaceNotifications = notifications.filter((n) => {
-    if (n.data?.workspace_id) {
-      return n.data.workspace_id.toString() === id;
-    }
-    return true;
-  });
-
-  const unreadCount = workspaceNotifications.filter((n) => !n.read).length;
 
   if (!currentWorkspace || !currentWorkspace.is_team) {
     return (
@@ -118,6 +91,8 @@ export default function WorkspaceNotifications() {
     );
   }
 
+  const displayNotifications = notifications.length > 0 ? notifications : [];
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
@@ -126,55 +101,103 @@ export default function WorkspaceNotifications() {
             Notifications
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+            {unreadNotifications.length > 0
+              ? `${unreadNotifications.length} unread notification${unreadNotifications.length !== 1 ? 's' : ''}`
+              : 'All caught up'}
           </p>
         </div>
+        {unreadNotifications.length > 0 && (
+          <Button
+            variant="secondary"
+            onClick={handleMarkAllAsRead}
+            className="flex items-center gap-2"
+            disabled={loading}
+          >
+            <CheckCheck size={16} />
+            Mark All Read
+          </Button>
+        )}
       </div>
 
-      {workspaceNotifications.length === 0 ? (
-        <EmptyState
-          icon={Bell}
-          title="No notifications"
-          description="You're all caught up! Notifications will appear here."
-        />
-      ) : (
-        <div className="space-y-2">
-          {workspaceNotifications.map((notification) => (
-            <div
-              key={notification.id}
-              className={`p-4 rounded-lg border-2 ${
-                notification.read
-                  ? 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700'
-                  : 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700'
-              } shadow-sm`}
-            >
-              <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 mt-0.5">
-                  {getNotificationIcon(notification.type)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className={`text-sm ${notification.read ? 'text-gray-700 dark:text-gray-300' : 'font-semibold text-gray-900 dark:text-white'}`}>
-                    {notification.message}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {new Date(notification.created_at).toLocaleString()}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  {!notification.read && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleMarkAsRead(notification.id)}
-                      className="p-1"
-                    >
-                      <CheckCircle2 size={14} />
-                    </Button>
-                  )}
-                </div>
-              </div>
+      {error && (
+        <div className="mb-4">
+          <ErrorMessage 
+            error={error} 
+            onRetry={() => {
+              loadNotifications();
+              loadUnreadNotifications();
+            }}
+          />
+        </div>
+      )}
+
+      {loading && notifications.length === 0 ? (
+        <div className="space-y-3">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700 p-4">
+              <Skeleton variant="text" lines={2} />
             </div>
           ))}
+        </div>
+      ) : displayNotifications.length === 0 ? (
+        <EmptyState
+          icon={Bell}
+          title="No notifications yet"
+          description="Notifications will appear here when there are updates in your workspace"
+        />
+      ) : (
+        <div className="space-y-3">
+          {displayNotifications.map((notification) => {
+            const isUnread = !notification.read_at;
+            return (
+              <div
+                key={notification.id}
+                className={`bg-white dark:bg-gray-800 rounded-lg border ${
+                  isUnread
+                    ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'
+                    : 'border-gray-300 dark:border-gray-700'
+                } p-4 shadow-sm hover:shadow-md transition-shadow`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 mt-0.5">
+                    {getNotificationIcon(notification.type)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <h4 className={`font-semibold text-gray-900 dark:text-white ${isUnread ? 'font-bold' : ''}`}>
+                        {notification.title}
+                      </h4>
+                      {isUnread && (
+                        <Badge variant="primary" size="sm" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                          New
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                      {notification.message}
+                    </p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {new Date(notification.created_at).toLocaleString()}
+                      </span>
+                      {isUnread && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleMarkAsRead(notification.id)}
+                          disabled={markingAsRead === notification.id}
+                          className="flex items-center gap-1 text-xs"
+                        >
+                          <Check size={14} />
+                          {markingAsRead === notification.id ? 'Marking...' : 'Mark as read'}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

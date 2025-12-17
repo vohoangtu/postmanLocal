@@ -1,54 +1,17 @@
 /**
  * Discussion Store
- * Quản lý discussions trong workspace
+ * Quản lý discussions trong collection
  */
 
 import { create } from 'zustand';
 import { authService } from '../services/authService';
-
-export interface DiscussionReply {
-  id: string;
-  discussion_id: string;
-  user_id: string;
-  content: string;
-  created_at: string;
-  updated_at: string;
-  user?: {
-    id: string;
-    name: string;
-    email: string;
-  };
-}
-
-export interface Discussion {
-  id: string;
-  workspace_id: string;
-  title: string;
-  content: string;
-  created_by: string;
-  resolved: boolean;
-  resolved_by?: string;
-  resolved_at?: string;
-  created_at: string;
-  updated_at: string;
-  creator?: {
-    id: string;
-    name: string;
-    email: string;
-  };
-  resolver?: {
-    id: string;
-    name: string;
-    email: string;
-  };
-  replies?: DiscussionReply[];
-}
+import type { Discussion, DiscussionReply } from '../types/workspace';
 
 interface DiscussionStore {
   discussions: Discussion[];
   loading: boolean;
-  loadDiscussions: (workspaceId: string, filters?: any) => Promise<void>;
-  createDiscussion: (workspaceId: string, discussionData: Partial<Discussion>) => Promise<Discussion>;
+  loadDiscussions: (collectionId: string, filters?: any) => Promise<void>;
+  createDiscussion: (collectionId: string, discussionData: Partial<Discussion>) => Promise<Discussion>;
   updateDiscussion: (discussionId: string, updates: Partial<Discussion>) => Promise<void>;
   deleteDiscussion: (discussionId: string) => Promise<void>;
   addReply: (discussionId: string, content: string) => Promise<DiscussionReply>;
@@ -61,7 +24,7 @@ export const useDiscussionStore = create<DiscussionStore>((set, get) => ({
   discussions: [],
   loading: false,
 
-  loadDiscussions: async (workspaceId, filters = {}) => {
+  loadDiscussions: async (collectionId, filters = {}) => {
     set({ loading: true });
     try {
       const token = await authService.getAccessToken();
@@ -74,7 +37,7 @@ export const useDiscussionStore = create<DiscussionStore>((set, get) => ({
         }
       });
 
-      const url = `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"}/workspaces/${workspaceId}/discussions${params.toString() ? `?${params.toString()}` : ''}`;
+      const url = `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"}/collections/${collectionId}/discussions${params.toString() ? `?${params.toString()}` : ''}`;
       
       const response = await fetch(url, {
         headers: {
@@ -94,20 +57,20 @@ export const useDiscussionStore = create<DiscussionStore>((set, get) => ({
     }
   },
 
-  createDiscussion: async (workspaceId, discussionData) => {
+  createDiscussion: async (collectionId, discussionData) => {
     try {
       const token = await authService.getAccessToken();
       if (!token) throw new Error('Not authenticated');
 
       const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"}/workspaces/${workspaceId}/discussions`,
+        `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"}/collections/${collectionId}/discussions`,
         {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(discussionData),
+          body: JSON.stringify({ ...discussionData, collection_id: collectionId }),
         }
       );
 

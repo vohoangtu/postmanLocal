@@ -66,6 +66,8 @@ export default function OnboardingFlow({ onComplete, onSkip }: OnboardingFlowPro
         onComplete?.();
       } catch (error) {
         console.error('Error completing onboarding:', error);
+        // Hiển thị error message cho user
+        alert('Không thể hoàn thành onboarding. Vui lòng thử lại.');
       } finally {
         setIsCompleting(false);
       }
@@ -73,12 +75,20 @@ export default function OnboardingFlow({ onComplete, onSkip }: OnboardingFlowPro
       // Chuyển sang bước tiếp theo
       const nextStep = getNextStep(currentStepId);
       if (nextStep) {
+        setIsCompleting(true);
         try {
+          // Complete step hiện tại
           await completeStep(currentStepId);
+          // Reload onboarding status để đảm bảo state được cập nhật
+          await loadOnboardingStatus();
+          // Chuyển sang step tiếp theo
           setCurrentStepId(nextStep.id);
-          await completeStep(nextStep.id);
         } catch (error) {
           console.error('Error completing step:', error);
+          // Hiển thị error message cho user
+          alert('Không thể chuyển sang bước tiếp theo. Vui lòng thử lại.');
+        } finally {
+          setIsCompleting(false);
         }
       }
     }

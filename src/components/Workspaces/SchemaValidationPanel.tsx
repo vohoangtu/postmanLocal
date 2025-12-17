@@ -55,7 +55,7 @@ export default function SchemaValidationPanel({ errors, onErrorClick }: Validati
           {errors.map((error, index) => (
             <div
               key={index}
-              className={`p-3 rounded border-2 ${
+              className={`p-3 rounded border ${
                 error.level === 'error'
                   ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700'
                   : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'

@@ -4,7 +4,17 @@
  */
 
 import { authService } from './authService';
-import { MockServer, MockRoute } from '../stores/mockServerStore';
+import { MockServer, MockRoute as StoreMockRoute } from '../stores/mockServerStore';
+
+// MockRoute type cho MockServerPanel (web mock server)
+export interface MockRoute {
+  path: string;
+  method: string;
+  status: number;
+  headers: { [key: string]: string };
+  body: any;
+  delayMs?: number;
+}
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 
@@ -189,7 +199,7 @@ export async function stopMockServer(serverId: string): Promise<MockServer> {
 /**
  * Lấy routes của mock server
  */
-export async function getMockServerRoutes(serverId: string): Promise<MockRoute[]> {
+export async function getMockServerRoutes(serverId: string): Promise<StoreMockRoute[]> {
   const token = await authService.getAccessToken();
   if (!token) {
     throw new Error('Chưa đăng nhập');

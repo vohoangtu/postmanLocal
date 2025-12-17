@@ -31,7 +31,7 @@ export default function VersionDiffViewer({ diff, current, previous }: DiffViewe
         {diff.map((change, index) => (
           <div
             key={index}
-            className={`p-3 rounded border-2 ${
+            className={`p-3 rounded border ${
               change.type === 'added'
                 ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700'
                 : change.type === 'removed'

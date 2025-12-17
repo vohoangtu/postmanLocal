@@ -8,10 +8,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useCollectionStore, Request } from '../../stores/collectionStore';
 import { useTabStore } from '../../stores/tabStore';
 import { useEnvironmentStore } from '../../stores/environmentStore';
-import RequestBuilder from '../RequestBuilder/RequestBuilder';
+import RequestBuilder from '../RequestBuilder/WorkspaceRequestBuilder';
+import FolderManager from '../Folders/FolderManager';
 import Button from '../UI/Button';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, X } from 'lucide-react';
 import SkeletonLoader from '../UI/SkeletonLoader';
+import Skeleton from '../UI/Skeleton';
 import { getCollection } from '../../services/collectionService';
 import { authService } from '../../services/authService';
 
@@ -29,6 +31,7 @@ export default function CollectionRequestBuilder() {
   const [loading, setLoading] = useState(true);
   const [originalRequestId, setOriginalRequestId] = useState<string | null>(null);
   const [hasSavedRequest, setHasSavedRequest] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const collection = collectionId ? collections.find((c) => c.id === collectionId) : null;
   const isNewRequest = requestId === 'new';
@@ -209,34 +212,70 @@ export default function CollectionRequestBuilder() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-gray-800">
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 border-b-2 border-gray-200 dark:border-gray-700 p-4">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleBack}
-            className="flex items-center gap-1"
-          >
-            <ArrowLeft size={16} />
-            Back to Requests
-          </Button>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            {isNewRequest ? 'New Request' : request?.name || 'Edit Request'}
-          </h2>
+    <div className="flex h-full bg-white dark:bg-gray-800">
+      {/* Left Sidebar - Request Tree */}
+      {sidebarOpen && (
+        <div className="w-64 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col">
+          <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+              {collection?.name || 'Collection'}
+            </h3>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSidebarOpen(false)}
+              className="p-1"
+            >
+              <X size={16} />
+            </Button>
+          </div>
+          <div className="flex-1 overflow-y-auto overflow-x-hidden">
+            <FolderManager collectionId={collectionId || undefined} />
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Request Builder */}
-      {/* Render RequestBuilder ngay cả khi chưa có tabId để form hiển thị với default values */}
-      <div className="flex-1 overflow-hidden">
-        <RequestBuilder
-          requestId={null}
-          tabId={tabId || undefined}
-          onResponse={handleResponse}
-          onSaveSuccess={handleSaveSuccess}
-        />
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Header */}
+        <div className="bg-white dark:bg-gray-800 border-b-2 border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center gap-3">
+            {!sidebarOpen && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSidebarOpen(true)}
+                className="flex items-center gap-1"
+              >
+                <ArrowLeft size={16} />
+                Show Tree
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleBack}
+              className="flex items-center gap-1"
+            >
+              <ArrowLeft size={16} />
+              Back to Requests
+            </Button>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              {isNewRequest ? 'New Request' : request?.name || 'Edit Request'}
+            </h2>
+          </div>
+        </div>
+
+        {/* Request Builder */}
+        {/* Render RequestBuilder ngay cả khi chưa có tabId để form hiển thị với default values */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+          <RequestBuilder
+            requestId={null}
+            tabId={tabId || undefined}
+            onResponse={handleResponse}
+            onSaveSuccess={handleSaveSuccess}
+          />
+        </div>
       </div>
     </div>
   );

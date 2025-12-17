@@ -3,36 +3,32 @@
  * Hiển thị analytics và metrics cho team workspace
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
-import { BarChart3, Users, FolderOpen, FileText, TrendingUp } from 'lucide-react';
+import { BarChart3, Users, FolderOpen, FileText, AlertCircle } from 'lucide-react';
 import EmptyState from '../EmptyStates/EmptyState';
 import Card from '../UI/Card';
+import Skeleton from '../UI/Skeleton';
+import ErrorMessage from '../UI/ErrorMessage';
 
 export default function WorkspaceAnalytics() {
   const { id } = useParams<{ id: string }>();
-  const { currentWorkspace, loadWorkspace, workspaceAnalytics, loadWorkspaceAnalytics } = useWorkspaceStore();
-  const [loading, setLoading] = useState(true);
+  const { 
+    currentWorkspace, 
+    loadWorkspace, 
+    workspaceAnalytics, 
+    loadWorkspaceAnalytics,
+    loading,
+    error 
+  } = useWorkspaceStore();
 
   useEffect(() => {
     if (id) {
       loadWorkspace(id);
-      loadAnalytics();
+      loadWorkspaceAnalytics(id);
     }
   }, [id, loadWorkspace, loadWorkspaceAnalytics]);
-
-  const loadAnalytics = async () => {
-    if (!id) return;
-    setLoading(true);
-    try {
-      await loadWorkspaceAnalytics(id);
-    } catch (error) {
-      console.error('Failed to load analytics:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (!currentWorkspace || !currentWorkspace.is_team) {
     return (
@@ -83,11 +79,26 @@ export default function WorkspaceAnalytics() {
         </p>
       </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="text-gray-500 dark:text-gray-400">Loading analytics...</div>
+      {error && (
+        <div className="mb-4">
+          <ErrorMessage 
+            error={error} 
+            onRetry={() => id && loadWorkspaceAnalytics(id)}
+          />
         </div>
-      ) : (
+      )}
+
+      {loading ? (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
+              <Card key={i} className="p-4">
+                <Skeleton variant="text" lines={2} />
+              </Card>
+            ))}
+          </div>
+        </div>
+      ) : !error ? (
         <div className="space-y-6">
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -116,7 +127,7 @@ export default function WorkspaceAnalytics() {
 
           {/* Additional Analytics */}
           {workspaceAnalytics ? (
-            <div className="bg-white dark:bg-gray-800 rounded-lg border-2 border-gray-300 dark:border-gray-700 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700 p-6">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                 Detailed Analytics
               </h3>
@@ -132,7 +143,7 @@ export default function WorkspaceAnalytics() {
             />
           )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

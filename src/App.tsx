@@ -1,17 +1,20 @@
-import { memo } from "react";
 import { AuthProvider } from "./contexts/AuthContext";
 import AppRouter from "./components/AppRouter";
 import { useUserPreferences } from "./hooks/useUserPreferences";
 
-function App() {
+// Component để apply user preferences bên trong AuthProvider
+function AppContent() {
   // Apply user preferences (theme, etc.)
   useUserPreferences();
+  return <AppRouter />;
+}
 
+function App() {
   return (
     <AuthProvider>
-      <AppRouter />
+      <AppContent />
     </AuthProvider>
   );
 }
 
-export default memo(App);
+export default App;

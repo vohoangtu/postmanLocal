@@ -6,36 +6,68 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useToast } from '../../hooks/useToast';
+import { useCollectionStore } from '../../stores/collectionStore';
 import { importCollectionsToWorkspace, exportWorkspaceCollections } from '../../services/importExportService';
 import Button from '../UI/Button';
+import ErrorMessage from '../Error/ErrorMessage';
 import { Upload, Download, FileJson, FileCode, Loader2 } from 'lucide-react';
 
-export default function CollectionImportExport() {
+interface CollectionImportExportProps {
+  onImportSuccess?: () => void;
+}
+
+export default function CollectionImportExport({ onImportSuccess }: CollectionImportExportProps = {}) {
   const { id: workspaceId } = useParams<{ id: string }>();
   const toast = useToast();
+  const { triggerReload } = useCollectionStore();
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !workspaceId) return;
+    console.log('File selected:', file?.name, 'Workspace ID:', workspaceId);
+    
+    if (!file) {
+      setError('Vui lòng chọn file');
+      return;
+    }
+    
+    if (!workspaceId) {
+      setError('Workspace ID không hợp lệ');
+      return;
+    }
 
     setImporting(true);
+    setError(null);
     try {
+      console.log('Starting import...');
       const { collections, errors } = await importCollectionsToWorkspace(workspaceId, file);
+      console.log('Import result:', { collections: collections.length, errors: errors.length });
 
       if (collections.length > 0) {
-        toast.success(`Successfully imported ${collections.length} collection(s)`);
+        toast.success(`Đã import thành công ${collections.length} collection(s)`);
+        // Trigger reload collections trong store
+        triggerReload();
+        // Callback để parent component refresh
+        if (onImportSuccess) {
+          onImportSuccess();
+        }
       }
 
       if (errors.length > 0) {
+        const errorMessage = errors.join('; ');
+        setError(errorMessage);
         errors.forEach((error) => toast.error(error));
       }
 
       // Reset file input
       event.target.value = '';
     } catch (error: any) {
-      toast.error(error.message || 'Failed to import collections');
+      console.error('Import error:', error);
+      const errorMessage = error.message || 'Không thể import collections';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setImporting(false);
     }
@@ -66,9 +98,18 @@ export default function CollectionImportExport() {
         </p>
       </div>
 
+      {error && (
+        <div className="mb-4">
+          <ErrorMessage 
+            error={error} 
+            onDismiss={() => setError(null)}
+          />
+        </div>
+      )}
+
       <div className="space-y-4">
         {/* Import Section */}
-        <div className="p-4 bg-gray-50 dark:bg-gray-900/30 rounded-lg border-2 border-gray-300 dark:border-gray-700">
+        <div className="p-4 bg-gray-50 dark:bg-gray-900/30 rounded-lg border border-gray-300 dark:border-gray-700">
           <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
             <Upload size={18} />
             Import Collections
@@ -77,38 +118,44 @@ export default function CollectionImportExport() {
             Import collections from Postman collection (JSON) or OpenAPI specification files
           </p>
           <div className="flex items-center gap-2">
-            <label>
-              <input
-                type="file"
-                accept=".json"
-                onChange={handleImport}
-                disabled={importing}
-                className="hidden"
-              />
-              <Button
-                variant="primary"
-                as="span"
-                disabled={importing}
-                className="flex items-center gap-2 cursor-pointer"
-              >
-                {importing ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    Importing...
-                  </>
-                ) : (
-                  <>
-                    <Upload size={16} />
-                    Choose File
-                  </>
-                )}
-              </Button>
-            </label>
+            <input
+              type="file"
+              accept=".json"
+              onChange={handleImport}
+              disabled={importing}
+              className="hidden"
+              id="collection-import-input"
+            />
+            <Button
+              variant="primary"
+              type="button"
+              disabled={importing}
+              className="flex items-center gap-2 cursor-pointer"
+              onClick={(e) => {
+                e.preventDefault();
+                const input = document.getElementById('collection-import-input') as HTMLInputElement;
+                if (input && !importing) {
+                  input.click();
+                }
+              }}
+            >
+              {importing ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Đang import...
+                </>
+              ) : (
+                <>
+                  <Upload size={16} />
+                  Chọn File
+                </>
+              )}
+            </Button>
           </div>
         </div>
 
         {/* Export Section */}
-        <div className="p-4 bg-gray-50 dark:bg-gray-900/30 rounded-lg border-2 border-gray-300 dark:border-gray-700">
+        <div className="p-4 bg-gray-50 dark:bg-gray-900/30 rounded-lg border border-gray-300 dark:border-gray-700">
           <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
             <Download size={18} />
             Export Collections

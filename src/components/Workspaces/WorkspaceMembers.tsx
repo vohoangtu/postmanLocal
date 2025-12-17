@@ -3,43 +3,62 @@
  * Quản lý team members cho team workspace
  */
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useWorkspacePermission } from '../../hooks/useWorkspacePermission';
+import { useWorkspaceData } from '../../hooks/useWorkspaceData';
+import { useAsyncOperation } from '../../hooks/useAsyncOperation';
 import { useToast } from '../../hooks/useToast';
 import Button from '../UI/Button';
 import Badge from '../UI/Badge';
 import InviteMemberModal from './InviteMemberModal';
-import { Users, Plus, Loader2 } from 'lucide-react';
+import { Users, Plus } from 'lucide-react';
 import EmptyState from '../EmptyStates/EmptyState';
+import Skeleton from '../UI/Skeleton';
+import ErrorMessage from '../Error/ErrorMessage';
 
 export default function WorkspaceMembers() {
-  const { id } = useParams<{ id: string }>();
-  const { currentWorkspace, loadWorkspace } = useWorkspaceStore();
-  const permissions = useWorkspacePermission(currentWorkspace);
+  const { id: workspaceId } = useParams<{ id: string }>();
+  const { workspace, loading, error, reload } = useWorkspaceData(workspaceId);
+  const { removeMember } = useWorkspaceStore();
+  const permissions = useWorkspacePermission(workspace);
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const toast = useToast();
 
-  useEffect(() => {
-    if (id) {
-      loadWorkspace(id);
-    }
-  }, [id, loadWorkspace]);
+  // Remove member operation
+  const {
+    execute: executeRemoveMember,
+  } = useAsyncOperation(
+    async (memberUserId: string) => {
+      if (!workspaceId || !workspace) {
+        throw new Error('Workspace không hợp lệ');
+      }
 
-  if (!currentWorkspace || !currentWorkspace.is_team) {
+      await removeMember(workspaceId, memberUserId);
+      await reload();
+      toast.success('Đã xóa thành viên khỏi workspace');
+    },
+    {
+      onError: (error) => {
+        toast.error(error.message || 'Không thể xóa thành viên');
+      },
+    }
+  );
+
+  if (!workspace || !workspace.is_team) {
     return (
       <div className="p-6">
         <div className="text-center text-gray-500 dark:text-gray-400">
-          This workspace is not a team workspace.
+          Workspace này không phải là team workspace.
         </div>
       </div>
     );
   }
 
-  const members = currentWorkspace.team_members || [];
-  const owner = currentWorkspace.owner;
+  const members = workspace.team_members || [];
+  const owner = workspace.owner;
 
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
@@ -72,6 +91,7 @@ export default function WorkspaceMembers() {
             variant="primary"
             onClick={() => setShowInviteModal(true)}
             className="flex items-center gap-2"
+            disabled={loading}
           >
             <Plus size={16} />
             Invite Member
@@ -79,12 +99,28 @@ export default function WorkspaceMembers() {
         )}
       </div>
 
-      {/* Owner Section */}
+      {error && (
+        <div className="mb-4">
+          <ErrorMessage 
+            error={error} 
+            onRetry={() => reload()}
+          />
+        </div>
+      )}
+
+      {loading && !workspace ? (
+        <div className="space-y-4">
+          <Skeleton variant="card" height={80} />
+          <Skeleton variant="card" height={80} />
+        </div>
+      ) : (
+        <>
+          {/* Owner Section */}
       <div className="mb-6">
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
           Owner
         </h3>
-        <div className="bg-white dark:bg-gray-800 rounded-lg border-2 border-gray-300 dark:border-gray-700 p-4 shadow-sm">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700 p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-purple-500 flex items-center justify-center text-white font-semibold">
@@ -130,7 +166,7 @@ export default function WorkspaceMembers() {
             {members.map((member) => (
               <div
                 key={member.id}
-                className="bg-white dark:bg-gray-800 rounded-lg border-2 border-gray-300 dark:border-gray-700 p-4 shadow-sm"
+                className="bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700 p-4 shadow-sm"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -154,22 +190,18 @@ export default function WorkspaceMembers() {
                       <Button
                         variant="ghost"
                         size="sm"
+                        disabled={removingMemberId === member.user_id}
                         onClick={async () => {
-                          if (!confirm(`Remove ${member.user?.name} from workspace?`)) return;
+                          if (!confirm(`Xóa ${member.user?.name} khỏi workspace?`)) return;
+                          setRemovingMemberId(member.user_id);
                           try {
-                            const { removeMember } = useWorkspaceStore.getState();
-                            await removeMember(
-                              currentWorkspace.id.toString(),
-                              member.user_id
-                            );
-                            await loadWorkspace(id!);
-                            toast.success('Member removed');
-                          } catch (error: any) {
-                            toast.error(error.message || 'Failed to remove member');
+                            await executeRemoveMember(member.user_id);
+                          } finally {
+                            setRemovingMemberId(null);
                           }
                         }}
                       >
-                        Remove
+                        {removingMemberId === member.user_id ? 'Đang xóa...' : 'Xóa'}
                       </Button>
                     )}
                   </div>
@@ -179,13 +211,15 @@ export default function WorkspaceMembers() {
           </div>
         </div>
       )}
+        </>
+      )}
 
-      {showInviteModal && id && (
+      {showInviteModal && workspaceId && (
         <InviteMemberModal
-          workspaceId={id}
+          workspaceId={workspaceId}
           onClose={() => {
             setShowInviteModal(false);
-            loadWorkspace(id);
+            reload();
           }}
         />
       )}

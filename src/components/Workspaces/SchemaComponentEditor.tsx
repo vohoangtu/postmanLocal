@@ -126,7 +126,7 @@ export default function SchemaComponentEditor({ components, onUpdate }: Componen
               Object.entries(items).map(([name, data]) => (
                 <div
                   key={name}
-                  className="border-2 border-gray-200 dark:border-gray-700 rounded p-2"
+                  className="border border-gray-200 dark:border-gray-700 rounded p-2"
                 >
                   <div className="flex items-center justify-between mb-2">
                     <code className="text-sm font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">

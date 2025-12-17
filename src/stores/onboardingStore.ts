@@ -4,9 +4,7 @@
  */
 
 import { create } from 'zustand';
-import { authService } from '../services/authService';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+import apiClient from '../services/apiClient';
 
 export interface OnboardingState {
   completed: boolean;
@@ -42,24 +40,8 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => ({
   loadOnboardingStatus: async () => {
     set({ loading: true });
     try {
-      const token = await authService.getAccessToken();
-      if (!token) {
-        set({ onboarding: defaultOnboarding, loading: false });
-        return;
-      }
-
-      const response = await fetch(`${API_BASE_URL}/user/onboarding`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        set({ onboarding: data.onboarding || defaultOnboarding });
-      } else {
-        set({ onboarding: defaultOnboarding });
-      }
+      const data = await apiClient.get<{ onboarding: OnboardingState }>('/user/onboarding');
+      set({ onboarding: data.onboarding || defaultOnboarding });
     } catch (error) {
       console.error('Error loading onboarding status:', error);
       set({ onboarding: defaultOnboarding });
@@ -70,56 +52,28 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => ({
 
   completeStep: async (step: string) => {
     try {
-      const token = await authService.getAccessToken();
-      if (!token) {
-        throw new Error('Chưa đăng nhập');
-      }
-
-      const response = await fetch(`${API_BASE_URL}/user/onboarding/complete-step`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ step }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        set({ onboarding: data.onboarding });
-      } else {
-        throw new Error('Không thể hoàn thành bước');
-      }
+      const data = await apiClient.post<{ onboarding: OnboardingState }>(
+        '/user/onboarding/complete-step',
+        { step }
+      );
+      set({ onboarding: data.onboarding });
     } catch (error) {
       console.error('Error completing step:', error);
-      throw error;
+      const errorMessage = error instanceof Error ? error.message : 'Không thể hoàn thành bước';
+      throw new Error(errorMessage);
     }
   },
 
   completeOnboarding: async () => {
     try {
-      const token = await authService.getAccessToken();
-      if (!token) {
-        throw new Error('Chưa đăng nhập');
-      }
-
-      const response = await fetch(`${API_BASE_URL}/user/onboarding/complete`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        set({ onboarding: data.onboarding });
-      } else {
-        throw new Error('Không thể hoàn thành onboarding');
-      }
+      const data = await apiClient.post<{ onboarding: OnboardingState }>(
+        '/user/onboarding/complete'
+      );
+      set({ onboarding: data.onboarding });
     } catch (error) {
       console.error('Error completing onboarding:', error);
-      throw error;
+      const errorMessage = error instanceof Error ? error.message : 'Không thể hoàn thành onboarding';
+      throw new Error(errorMessage);
     }
   },
 
@@ -135,28 +89,14 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => ({
 
   resetOnboarding: async () => {
     try {
-      const token = await authService.getAccessToken();
-      if (!token) {
-        throw new Error('Chưa đăng nhập');
-      }
-
-      const response = await fetch(`${API_BASE_URL}/user/onboarding/reset`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        set({ onboarding: data.onboarding });
-      } else {
-        throw new Error('Không thể reset onboarding');
-      }
+      const data = await apiClient.post<{ onboarding: OnboardingState }>(
+        '/user/onboarding/reset'
+      );
+      set({ onboarding: data.onboarding });
     } catch (error) {
       console.error('Error resetting onboarding:', error);
-      throw error;
+      const errorMessage = error instanceof Error ? error.message : 'Không thể reset onboarding';
+      throw new Error(errorMessage);
     }
   },
 }));

@@ -202,7 +202,7 @@ export default function CollectionPermissionsModal({
                 permissions.map((permission) => (
                   <div
                     key={permission.user_id}
-                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-900/30 rounded-lg border-2 border-gray-300 dark:border-gray-700"
+                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-900/30 rounded-lg border border-gray-300 dark:border-gray-700"
                   >
                     <div className="flex-1">
                       <div className="flex items-center gap-2">

@@ -277,7 +277,7 @@ export default function ApiTestSuite() {
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Test suite description"
-                  className="w-full px-3 py-2 border-2 border-gray-400 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  className="w-full px-3 py-2 border border-gray-400 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   rows={3}
                 />
               </div>

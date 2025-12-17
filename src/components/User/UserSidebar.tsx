@@ -3,9 +3,9 @@
  * Sidebar navigation cho user panel
  */
 
-import { User, Lock, Settings, CreditCard } from 'lucide-react';
+import { User, Lock, Settings, CreditCard, Server } from 'lucide-react';
 
-type Tab = 'profile' | 'password' | 'preferences' | 'subscription';
+type Tab = 'profile' | 'password' | 'preferences' | 'subscription' | 'mock-server';
 
 interface UserSidebarProps {
   activeTab: Tab;
@@ -17,6 +17,7 @@ export default function UserSidebar({ activeTab, onTabChange }: UserSidebarProps
     { id: 'profile' as Tab, icon: User, label: 'Profile' },
     { id: 'password' as Tab, icon: Lock, label: 'Password' },
     { id: 'preferences' as Tab, icon: Settings, label: 'Preferences' },
+    { id: 'mock-server' as Tab, icon: Server, label: 'Mock Server' },
     { id: 'subscription' as Tab, icon: CreditCard, label: 'Subscription' },
   ];
 

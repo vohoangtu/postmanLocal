@@ -200,7 +200,7 @@ export default function ApiVersionManager() {
             {versions.map((version) => (
               <div
                 key={version.id}
-                className={`p-4 border-2 rounded-lg ${
+                className={`p-4 border rounded-lg ${
                   version.is_current
                     ? 'border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
                     : 'border-gray-200 dark:border-gray-700'
@@ -285,7 +285,7 @@ export default function ApiVersionManager() {
                   value={changelog}
                   onChange={(e) => setChangelog(e.target.value)}
                   placeholder="Describe changes in this version..."
-                  className="w-full px-3 py-2 border-2 border-gray-400 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  className="w-full px-3 py-2 border border-gray-400 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   rows={4}
                 />
               </div>

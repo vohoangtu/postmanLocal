@@ -76,7 +76,7 @@ export default function ApiDocumentationGenerator() {
       </div>
 
       <div className="space-y-4">
-        <div className="p-4 bg-gray-50 dark:bg-gray-900/30 rounded-lg border-2 border-gray-300 dark:border-gray-700">
+        <div className="p-4 bg-gray-50 dark:bg-gray-900/30 rounded-lg border border-gray-300 dark:border-gray-700">
           <h3 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
             <FileText size={18} />
             Export Format
@@ -133,7 +133,7 @@ export default function ApiDocumentationGenerator() {
           </div>
         </div>
 
-        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border-2 border-blue-300 dark:border-blue-700">
+        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-300 dark:border-blue-700">
           <h4 className="font-semibold text-blue-900 dark:text-blue-200 mb-2">
             Documentation Includes:
           </h4>
@@ -159,7 +159,7 @@ export default function ApiDocumentationGenerator() {
       >
         <div className="max-h-96 overflow-y-auto">
           {format === 'markdown' ? (
-            <pre className="whitespace-pre-wrap text-sm bg-gray-50 dark:bg-gray-900 p-4 rounded border-2 border-gray-300 dark:border-gray-700">
+            <pre className="whitespace-pre-wrap text-sm bg-gray-50 dark:bg-gray-900 p-4 rounded border border-gray-300 dark:border-gray-700">
               {previewContent || 'Loading preview...'}
             </pre>
           ) : format === 'html' ? (
@@ -168,7 +168,7 @@ export default function ApiDocumentationGenerator() {
               dangerouslySetInnerHTML={{ __html: previewContent || '' }}
             />
           ) : (
-            <pre className="whitespace-pre-wrap text-sm bg-gray-50 dark:bg-gray-900 p-4 rounded border-2 border-gray-300 dark:border-gray-700">
+            <pre className="whitespace-pre-wrap text-sm bg-gray-50 dark:bg-gray-900 p-4 rounded border border-gray-300 dark:border-gray-700">
               {previewContent ? JSON.stringify(JSON.parse(previewContent), null, 2) : 'Loading preview...'}
             </pre>
           )}

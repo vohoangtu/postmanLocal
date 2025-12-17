@@ -1,10 +1,18 @@
-import { useState, useEffect } from "react";
-import { Play, Square, Server, Plus, Trash2, HelpCircle, FileText, X } from "lucide-react";
-import { mockServerService, MockRoute } from "../../services/mockServerService";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Play, Square, Server, Plus, HelpCircle, FileText, X } from "lucide-react";
+import { MockRoute } from "../../services/mockServerService";
+import { webMockServerService } from "../../services/webMockServerService";
 import { useToast } from "../../hooks/useToast";
 import LoadingSpinner from "../Loading/LoadingSpinner";
 import MockResponseEditor from "./MockResponseEditor";
 import MockServerHelpModal from "./MockServerHelpModal";
+import MockRouteCard from "./MockRouteCard";
+import PageLayout from "../Layout/PageLayout";
+import PageToolbar from "../Layout/PageToolbar";
+import Button from "../UI/Button";
+import Input from "../UI/Input";
+import Select from "../UI/Select";
+import EmptyState from "../EmptyStates/EmptyState";
 import { useSchemaStore } from "../../stores/schemaStore";
 import { parseOpenAPISchema, validateOpenAPISchema } from "../../services/openApiParser";
 
@@ -26,7 +34,7 @@ export default function MockServerPanel() {
 
   const checkStatus = async () => {
     try {
-      const status = await mockServerService.getMockServerStatus();
+      const status = await webMockServerService.getMockServerStatus();
       setIsRunning(status.running);
       if (status.port) setPort(status.port);
     } catch (error) {
@@ -47,7 +55,7 @@ export default function MockServerPanel() {
 
     setLoading(true);
     try {
-      await mockServerService.startMockServer(port, routes);
+      await webMockServerService.startMockServer(port, routes);
       setIsRunning(true);
       toast.success(`Mock server started on port ${port}`);
     } catch (error: any) {
@@ -60,7 +68,7 @@ export default function MockServerPanel() {
   const handleStop = async () => {
     setLoading(true);
     try {
-      await mockServerService.stopMockServer();
+      await webMockServerService.stopMockServer();
       setIsRunning(false);
       toast.success("Mock server stopped");
     } catch (error: any) {
@@ -97,11 +105,11 @@ export default function MockServerPanel() {
         if (editingIndex >= 0) {
           // Update existing route - need to remove old and add new
           // For simplicity, we'll just restart with updated routes
-          await mockServerService.stopMockServer();
-          await mockServerService.startMockServer(port, updatedRoutes);
+          await webMockServerService.stopMockServer();
+          await webMockServerService.startMockServer(port, updatedRoutes);
           setIsRunning(true);
         } else {
-          await mockServerService.addMockRoute(route);
+          await webMockServerService.addMockRoute(route);
         }
         toast.success("Route saved and synced");
       } catch (error: any) {
@@ -203,142 +211,142 @@ export default function MockServerPanel() {
     input.click();
   };
 
-  return (
-    <div className="p-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-            <Server className="w-5 h-5" />
-            Mock Server
-          </h2>
-          <button
-            onClick={() => setShowHelpModal(true)}
-            className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-            title="Hướng dẫn sử dụng Mock Server"
-          >
-            <HelpCircle className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="flex items-center gap-2">
-          {!isRunning ? (
-            <>
-              <input
-                type="number"
-                value={port}
-                onChange={(e) => setPort(parseInt(e.target.value) || 3000)}
-                className="w-24 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="Port"
-                disabled={isRunning}
-              />
+  const schemaOptions = useMemo(() => {
+    return schemas.map((schema) => ({ value: schema.id, label: schema.name }));
+  }, [schemas]);
+
+  const handleEditRoute = useCallback((route: MockRoute) => {
+    setEditingRoute(route);
+  }, []);
+
+  const renderToolbar = useCallback(() => {
+    return (
+      <PageToolbar
+        leftSection={
+          <>
+            <div className="flex items-center gap-2">
+              <Server className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Mock Server
+              </h2>
               <button
-                onClick={handleStart}
-                disabled={loading}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400"
+                onClick={() => setShowHelpModal(true)}
+                className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                title="Hướng dẫn sử dụng Mock Server"
               >
-                {loading ? <LoadingSpinner size="sm" /> : <Play className="w-4 h-4" />}
-                Start
+                <HelpCircle className="w-5 h-5" />
               </button>
-            </>
-          ) : (
-            <button
-              onClick={handleStop}
-              disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-gray-400"
-            >
-              {loading ? <LoadingSpinner size="sm" /> : <Square className="w-4 h-4" />}
-              Stop
-            </button>
-          )}
-        </div>
-      </div>
-
-      {isRunning && (
-        <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded">
-          <p className="text-sm text-green-800 dark:text-green-200">
-            Server running on <code className="font-mono">http://localhost:{port}</code>
-          </p>
-        </div>
-      )}
-
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Routes</h3>
-          <div className="flex items-center gap-2">
-            <button
+            </div>
+            {isRunning && (
+              <div className="px-3 py-1.5 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded">
+                <p className="text-xs text-green-800 dark:text-green-200">
+                  Running on <code className="font-mono">http://localhost:{port}</code>
+                </p>
+              </div>
+            )}
+            {!isRunning && (
+              <>
+                <Input
+                  type="number"
+                  value={port}
+                  onChange={(e) => setPort(parseInt(e.target.value) || 3000)}
+                  placeholder="Port"
+                  disabled={isRunning}
+                  className="w-24"
+                />
+                <Button
+                  variant="primary"
+                  onClick={handleStart}
+                  disabled={loading || routes.length === 0}
+                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+                >
+                  {loading ? <LoadingSpinner size="sm" /> : <Play className="w-4 h-4" />}
+                  Start
+                </Button>
+              </>
+            )}
+            {isRunning && (
+              <Button
+                variant="primary"
+                onClick={handleStop}
+                disabled={loading}
+                className="flex items-center gap-2 bg-red-600 hover:bg-red-700"
+              >
+                {loading ? <LoadingSpinner size="sm" /> : <Square className="w-4 h-4" />}
+                Stop
+              </Button>
+            )}
+          </>
+        }
+        rightSection={
+          <>
+            <Button
+              variant="ghost"
               onClick={handleImportFromFile}
-              className="flex items-center gap-1 px-3 py-1 text-sm bg-purple-600 text-white rounded hover:bg-purple-700"
+              className="flex items-center gap-1 bg-purple-600 text-white hover:bg-purple-700"
               title="Import từ OpenAPI file"
             >
               <FileText className="w-4 h-4" />
               Import File
-            </button>
+            </Button>
             {schemas.length > 0 && (
-              <select
+              <Select
                 onChange={(e) => {
                   if (e.target.value) {
                     handleImportFromSchema(e.target.value);
                     e.target.value = "";
                   }
                 }}
-                className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                options={[
+                  { value: "", label: "Import từ Schema..." },
+                  ...schemaOptions
+                ]}
                 defaultValue=""
-              >
-                <option value="">Import từ Schema...</option>
-                {schemas.map((schema) => (
-                  <option key={schema.id} value={schema.id}>
-                    {schema.name}
-                  </option>
-                ))}
-              </select>
+                className="w-48"
+              />
             )}
-            <button
+            <Button
+              variant="primary"
               onClick={handleAddRoute}
-              className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+              className="flex items-center gap-1"
             >
               <Plus className="w-4 h-4" />
               Add Route
-            </button>
-          </div>
-        </div>
+            </Button>
+          </>
+        }
+      />
+    );
+  }, [isRunning, port, loading, routes.length, schemas.length, schemaOptions, handleStart, handleStop, handleImportFromFile, handleImportFromSchema]);
 
+  return (
+    <>
+      <PageLayout toolbar={renderToolbar()}>
+        {/* Routes Grid */}
         {routes.length === 0 ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-            No routes configured. Add a route to get started.
-          </p>
+          <EmptyState
+            icon={Server}
+            title="No routes configured"
+            description="Add a route to get started with your mock server"
+            action={{
+              label: "Add First Route",
+              onClick: handleAddRoute,
+            }}
+          />
         ) : (
-          <div className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {routes.map((route, index) => (
-              <div
+              <MockRouteCard
                 key={index}
-                className="p-3 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 flex items-center justify-between"
-              >
-                <div>
-                  <span className="font-mono text-sm font-medium text-gray-900 dark:text-white">
-                    {route.method} {route.path}
-                  </span>
-                  <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
-                    Status: {route.status}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setEditingRoute(route)}
-                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDeleteRoute(index)}
-                    className="text-sm text-red-600 dark:text-red-400 hover:underline"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+                route={route}
+                index={index}
+                onEdit={handleEditRoute}
+                onDelete={handleDeleteRoute}
+              />
             ))}
           </div>
         )}
-      </div>
+      </PageLayout>
 
       {editingRoute && (
         <MockResponseEditor
@@ -421,7 +429,7 @@ export default function MockServerPanel() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 

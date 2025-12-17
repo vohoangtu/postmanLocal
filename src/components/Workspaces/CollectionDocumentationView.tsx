@@ -4,7 +4,7 @@
  */
 
 import { useParams } from 'react-router-dom';
-import CollectionDocumentation from '../Collections/CollectionDocumentation';
+import WorkspaceCollectionDocumentation from '../Collections/WorkspaceCollectionDocumentation';
 
 export default function CollectionDocumentationView() {
   const { collectionId } = useParams<{ collectionId: string }>();
@@ -19,5 +19,5 @@ export default function CollectionDocumentationView() {
     );
   }
 
-  return <CollectionDocumentation collectionId={collectionId} />;
+  return <WorkspaceCollectionDocumentation collectionId={collectionId} />;
 }

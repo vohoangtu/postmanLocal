@@ -9,8 +9,9 @@ import ProfileSettings from './ProfileSettings';
 import PasswordSettings from './PasswordSettings';
 import PreferencesSettings from './PreferencesSettings';
 import SubscriptionSettings from './SubscriptionSettings';
+import MockServerSettings from '../Settings/MockServerSettings';
 
-type Tab = 'profile' | 'password' | 'preferences' | 'subscription';
+type Tab = 'profile' | 'password' | 'preferences' | 'subscription' | 'mock-server';
 
 export default function UserPanel() {
   const [activeTab, setActiveTab] = useState<Tab>('profile');
@@ -25,6 +26,8 @@ export default function UserPanel() {
         return <PreferencesSettings />;
       case 'subscription':
         return <SubscriptionSettings />;
+      case 'mock-server':
+        return <MockServerSettings />;
       default:
         return <ProfileSettings />;
     }

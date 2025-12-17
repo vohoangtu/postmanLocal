@@ -157,12 +157,12 @@ export default function VersionDiff({ collectionId, versionId, onClose }: Versio
             </div>
           </div>
         ) : (
-          <div className="flex-1 grid grid-cols-2 gap-4 overflow-hidden">
+          <div className="flex-1 grid grid-cols-2 gap-4 min-w-0">
             <div className="flex flex-col">
               <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Current Version
               </h4>
-              <div className="flex-1 border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
+              <div className="flex-1 border border-gray-300 dark:border-gray-600 rounded overflow-y-auto overflow-x-hidden">
                 <Editor
                   height="100%"
                   defaultLanguage="json"
@@ -181,7 +181,7 @@ export default function VersionDiff({ collectionId, versionId, onClose }: Versio
               <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Version {versionData ? "Snapshot" : ""}
               </h4>
-              <div className="flex-1 border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
+              <div className="flex-1 border border-gray-300 dark:border-gray-600 rounded overflow-y-auto overflow-x-hidden">
                 <Editor
                   height="100%"
                   defaultLanguage="json"

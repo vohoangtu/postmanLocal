@@ -12,7 +12,6 @@ class RequestReview extends BaseModel
     protected $fillable = [
         'request_id',
         'collection_id',
-        'workspace_id',
         'reviewer_id',
         'status',
         'comments',
@@ -31,13 +30,6 @@ class RequestReview extends BaseModel
         return $this->belongsTo(Collection::class);
     }
 
-    /**
-     * Get the workspace
-     */
-    public function workspace(): BelongsTo
-    {
-        return $this->belongsTo(Workspace::class);
-    }
 
     /**
      * Get the reviewer

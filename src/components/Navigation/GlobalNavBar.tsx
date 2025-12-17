@@ -3,71 +3,92 @@
  * Navigation bar chung cho toàn bộ app, hiển thị ở tất cả các trang (trừ login/register)
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useUserPreferencesStore } from '../../stores/userPreferencesStore';
+import { useNavigation } from '../../contexts/NavigationContext';
 import Button from '../UI/Button';
+import NotificationCenter from '../Notifications/NotificationCenter';
+import MobileNavMenu from './MobileNavMenu';
+import NavBarItem from './NavBarItem';
+import { mainAppNavItems, getCoreNavItems, getToolsNavItems, getCollaborationNavItems } from './navConfig';
+import { cn } from '../../utils/cn';
 import { 
   Home, 
-  Users, 
   User, 
   Settings, 
   LogOut, 
   ChevronDown, 
   Sun, 
   Moon,
-  Search,
   FileText,
   Menu,
-  X
+  X,
+  Shield
 } from 'lucide-react';
 
 export default function GlobalNavBar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
-  const { workspaces, loadWorkspaces } = useWorkspaceStore();
   const { preferences, setPreferencesLocal, updatePreferences } = useUserPreferencesStore();
-  const [showWorkspacesDropdown, setShowWorkspacesDropdown] = useState(false);
+  const { activeView, handleViewChange, handleNewRequest } = useNavigation();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [isDark, setIsDark] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  // Load workspaces khi component mount
-  useEffect(() => {
-    if (user) {
-      loadWorkspaces();
-    }
-  }, [user, loadWorkspaces]);
+  // Workspace loading removed - không còn workspace concept
 
-  // Kiểm tra theme hiện tại
+  // Kiểm tra theme hiện tại và sync với preferences
   useEffect(() => {
     const checkTheme = () => {
       const root = document.documentElement;
-      setIsDark(root.classList.contains('dark'));
+      const isCurrentlyDark = root.classList.contains('dark');
+      setIsDark(isCurrentlyDark);
     };
     
+    // Kiểm tra theme ban đầu
     checkTheme();
     
+    // Listen cho changes từ DOM
     const observer = new MutationObserver(checkTheme);
     observer.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ['class']
     });
     
-    return () => observer.disconnect();
+    // Listen cho storage events (sync giữa các tabs)
+    const handleStorageChange = () => {
+      checkTheme();
+    };
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Sync với preferences store
+    if (preferences.theme) {
+      const root = document.documentElement;
+      const shouldBeDark = preferences.theme === 'dark' || 
+        (preferences.theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      
+      if (shouldBeDark && !root.classList.contains('dark')) {
+        root.classList.add('dark');
+        setIsDark(true);
+      } else if (!shouldBeDark && root.classList.contains('dark')) {
+        root.classList.remove('dark');
+        setIsDark(false);
+      }
+    }
+    
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, [preferences.theme]);
 
   // Đóng dropdown khi click outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowWorkspacesDropdown(false);
-      }
       if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
         setShowUserMenu(false);
       }
@@ -80,7 +101,12 @@ export default function GlobalNavBar() {
   // Toggle theme
   const handleToggleTheme = async () => {
     const newTheme = isDark ? 'light' : 'dark';
+    
+    // Apply theme ngay lập tức
     setPreferencesLocal({ theme: newTheme });
+    
+    // Cập nhật state để UI phản ánh ngay
+    setIsDark(newTheme === 'dark');
     
     try {
       await updatePreferences({ theme: newTheme });
@@ -95,8 +121,22 @@ export default function GlobalNavBar() {
     navigate('/login');
   };
 
-  // Kiểm tra xem có đang ở workspace page không
-  const isWorkspacePage = location.pathname.startsWith('/workspace/');
+  // Kiểm tra xem có đang ở collection page không
+  const isCollectionPage = location.pathname.startsWith('/collections/');
+  const isMainAppPage = location.pathname === '/' || location.pathname.startsWith('/user') || location.pathname.startsWith('/admin');
+
+  // Navigation items từ navConfig
+  const navItems = useMemo(() => mainAppNavItems, []);
+  const coreItems = useMemo(() => getCoreNavItems(navItems), [navItems]);
+  const toolsItems = useMemo(() => getToolsNavItems(navItems), [navItems]);
+  const collaborationItems = useMemo(() => getCollaborationNavItems(navItems), [navItems]);
+
+  // Handle nav item click
+  const handleNavItemClick = useCallback((view: string) => {
+    if (view) {
+      handleViewChange(view as any);
+    }
+  }, [handleViewChange]);
 
   // Không hiển thị trên login/register pages
   if (location.pathname === '/login' || location.pathname === '/register' || location.pathname.startsWith('/login/')) {
@@ -107,11 +147,12 @@ export default function GlobalNavBar() {
     <nav className="sticky top-0 z-50 bg-white dark:bg-gray-900 border-b-2 border-gray-300 dark:border-gray-700 shadow-md">
       <div className="max-w-full mx-auto px-4">
         <div className="flex items-center justify-between h-14">
-          {/* Left side: Logo và Home */}
-          <div className="flex items-center gap-4">
+          {/* Left side: Logo và Navigation */}
+          <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
+            {/* Logo */}
             <Link
               to="/"
-              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+              className="flex items-center gap-2 hover:opacity-80 transition-opacity flex-shrink-0"
             >
               <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-lg">
                 PL
@@ -121,88 +162,102 @@ export default function GlobalNavBar() {
               </span>
             </Link>
 
-            <div className="h-6 w-px bg-gray-400 dark:bg-gray-600 hidden md:block" />
+            {/* Divider */}
+            <div className="h-6 w-px bg-gray-400 dark:bg-gray-600 hidden md:block flex-shrink-0" />
 
             {/* Home button */}
             <Link
               to="/"
-              className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${
+              className={cn(
+                'hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors flex-shrink-0',
                 location.pathname === '/'
                   ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 font-semibold'
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 font-medium'
-              }`}
+              )}
             >
               <Home size={16} />
               <span>Home</span>
             </Link>
 
-            {/* Workspaces dropdown */}
-            {user && (
-              <div className="relative hidden md:block" ref={dropdownRef}>
-                <button
-                  onClick={() => setShowWorkspacesDropdown(!showWorkspacesDropdown)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${
-                    isWorkspacePage
-                      ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 font-semibold'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 font-medium'
-                  }`}
-                >
-                  <Users size={16} />
-                  <span>Workspaces</span>
-                  <ChevronDown size={14} />
-                </button>
-
-                {showWorkspacesDropdown && (
-                  <div className="absolute top-full left-0 mt-1 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border-2 border-gray-300 dark:border-gray-700 py-2 z-50 max-h-96 overflow-y-auto">
-                    {workspaces.length === 0 ? (
-                      <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                        No workspaces yet
-                      </div>
-                    ) : (
-                      <>
-                        {workspaces.map((workspace) => (
-                          <Link
-                            key={workspace.id}
-                            to={`/workspace/${workspace.id}`}
-                            onClick={() => setShowWorkspacesDropdown(false)}
-                            className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                          >
-                            <div className="font-medium">{workspace.name}</div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                              {workspace.is_team ? 'Team' : 'Personal'}
-                            </div>
-                          </Link>
-                        ))}
-                    <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
-                    <button
-                      onClick={() => {
-                        setShowWorkspacesDropdown(false);
-                        navigate('/');
-                      }}
-                      className="w-full text-left px-4 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                    >
-                      View all workspaces
-                    </button>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* Quick actions - New Request */}
             {user && (
               <>
-                <div className="h-6 w-px bg-gray-400 dark:bg-gray-600 hidden md:block" />
+                <div className="h-6 w-px bg-gray-400 dark:bg-gray-600 hidden md:block flex-shrink-0" />
                 <Button
                   variant="primary"
                   size="sm"
-                  onClick={() => navigate('/')}
-                  className="hidden md:flex items-center gap-1.5"
+                  onClick={handleNewRequest}
+                  className="hidden md:flex items-center gap-1.5 flex-shrink-0"
+                  disabled={!user}
+                  title={!user ? "Vui lòng đăng nhập để tạo request" : "Tạo request mới"}
                 >
                   <FileText size={16} />
                   <span>New Request</span>
                 </Button>
+              </>
+            )}
+
+            {/* Navigation Items - chỉ hiển thị ở MainApp */}
+            {isMainAppPage && user && (
+              <>
+                <div className="h-6 w-px bg-gray-400 dark:bg-gray-600 hidden md:block flex-shrink-0" />
+                
+                {/* Core Items */}
+                <div className="hidden md:flex items-center gap-2 flex-shrink-0">
+                  {coreItems.map((item) => (
+                    <NavBarItem
+                      key={item.id}
+                      id={item.id}
+                      label={item.label}
+                      icon={item.icon}
+                      onClick={() => item.view && handleViewChange(item.view)}
+                      isActive={activeView === item.view}
+                      feature={item.feature}
+                      size="md"
+                    />
+                  ))}
+                </div>
+
+                {/* Divider */}
+                <div className="h-6 w-px bg-gray-400 dark:bg-gray-600 hidden lg:block mx-1 flex-shrink-0" />
+
+                {/* Tools và Collaboration Items */}
+                <div className="hidden lg:flex items-center gap-2 flex-1 min-w-0 overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600">
+                  {/* Tools Items */}
+                  {toolsItems.map((item) => (
+                    <NavBarItem
+                      key={item.id}
+                      id={item.id}
+                      label={item.label}
+                      icon={item.icon}
+                      onClick={() => item.view && handleViewChange(item.view)}
+                      isActive={activeView === item.view}
+                      feature={item.feature}
+                      size="md"
+                      showLabel="responsive" // Hiển thị label trên xl screens
+                    />
+                  ))}
+
+                  {/* Collaboration Items */}
+                  {collaborationItems.length > 0 && (
+                    <>
+                      <div className="h-6 w-px bg-gray-400 dark:bg-gray-600 mx-2 flex-shrink-0" />
+                      {collaborationItems.map((item) => (
+                        <NavBarItem
+                          key={item.id}
+                          id={item.id}
+                          label={item.label}
+                          icon={item.icon}
+                          onClick={() => item.view && handleViewChange(item.view)}
+                          isActive={activeView === item.view}
+                          feature={item.feature}
+                          size="md"
+                          showLabel="responsive" // Hiển thị label trên xl screens
+                        />
+                      ))}
+                    </>
+                  )}
+                </div>
               </>
             )}
           </div>
@@ -226,6 +281,9 @@ export default function GlobalNavBar() {
                 <Moon size={20} />
               )}
             </button>
+
+            {/* Notification Center */}
+            {user && <NotificationCenter />}
 
             {/* User menu */}
             {user ? (
@@ -263,6 +321,16 @@ export default function GlobalNavBar() {
                       <Settings size={16} />
                       Settings
                     </Link>
+                    {(user.role === 'admin' || user.role === 'super_admin') && (
+                      <Link
+                        to="/admin/dashboard"
+                        onClick={() => setShowUserMenu(false)}
+                        className="flex items-center gap-2 px-4 py-2 text-sm text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+                      >
+                        <Shield size={16} />
+                        Admin Panel
+                      </Link>
+                    )}
                     <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
                     <button
                       onClick={() => {
@@ -297,43 +365,15 @@ export default function GlobalNavBar() {
         </div>
 
         {/* Mobile menu */}
-        {isMobileMenuOpen && (
-          <div className="md:hidden border-t border-gray-200 dark:border-gray-700 py-2">
-            <Link
-              to="/"
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-            >
-              Home
-            </Link>
-            {user && (
-              <>
-                <Link
-                  to="/"
-                  onClick={() => {
-                    setIsMobileMenuOpen(false);
-                    // Navigate to new request
-                  }}
-                  className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-                >
-                  New Request
-                </Link>
-                <div className="px-4 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
-                  Workspaces
-                </div>
-                {workspaces.map((workspace) => (
-                  <Link
-                    key={workspace.id}
-                    to={`/workspace/${workspace.id}`}
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-                  >
-                    {workspace.name}
-                  </Link>
-                ))}
-              </>
-            )}
-          </div>
+        {isMainAppPage && user && (
+          <MobileNavMenu
+            isOpen={isMobileMenuOpen}
+            onClose={() => setIsMobileMenuOpen(false)}
+            navItems={navItems}
+            onNavItemClick={handleNavItemClick}
+            onNewRequest={handleNewRequest}
+            currentPath={location.pathname}
+          />
         )}
       </div>
     </nav>

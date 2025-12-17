@@ -161,12 +161,24 @@ export default function ApiDesignDashboard() {
         </Card>
       </div>
 
-      {/* Quick Actions */}
+      {/* Quick Actions - Chỉ hiển thị các actions thường dùng nhất */}
       <Card
         title="Quick Actions"
         className="bg-gray-50 dark:bg-gray-900/30"
       >
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Most Common Actions */}
+          <Button
+            variant="primary"
+            onClick={() => navigate(`/workspace/${workspaceId}/collections`)}
+            className="flex items-center justify-between p-4 h-auto bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            <div className="flex items-center gap-2">
+              <Plus size={18} />
+              <span className="font-medium">New Collection</span>
+            </div>
+            <ArrowRight size={16} />
+          </Button>
           <Button
             variant="secondary"
             onClick={() => navigate(`/workspace/${workspaceId}/api-schema`)}
@@ -178,61 +190,21 @@ export default function ApiDesignDashboard() {
             </div>
             <ArrowRight size={16} />
           </Button>
-          <Button
-            variant="secondary"
-            onClick={() => navigate(`/workspace/${workspaceId}/api-versions`)}
-            className="flex items-center justify-between p-4 h-auto"
-          >
-            <div className="flex items-center gap-2">
-              <GitBranch size={18} />
-              <span>Versions</span>
-            </div>
-            <ArrowRight size={16} />
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => navigate(`/workspace/${workspaceId}/api-mocking`)}
-            className="flex items-center justify-between p-4 h-auto"
-          >
-            <div className="flex items-center gap-2">
-              <Server size={18} />
-              <span>Mock Servers</span>
-            </div>
-            <ArrowRight size={16} />
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => navigate(`/workspace/${workspaceId}/api-testing`)}
-            className="flex items-center justify-between p-4 h-auto"
-          >
-            <div className="flex items-center gap-2">
-              <TestTube size={18} />
-              <span>Test Suites</span>
-            </div>
-            <ArrowRight size={16} />
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => navigate(`/workspace/${workspaceId}/api-templates`)}
-            className="flex items-center justify-between p-4 h-auto"
-          >
-            <div className="flex items-center gap-2">
-              <Layers size={18} />
-              <span>Templates</span>
-            </div>
-            <ArrowRight size={16} />
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => navigate(`/workspace/${workspaceId}/design-reviews`)}
-            className="flex items-center justify-between p-4 h-auto"
-          >
-            <div className="flex items-center gap-2">
-              <Eye size={18} />
-              <span>Design Reviews</span>
-            </div>
-            <ArrowRight size={16} />
-          </Button>
+          {stats.pendingReviews > 0 && (
+            <Button
+              variant="secondary"
+              onClick={() => navigate(`/workspace/${workspaceId}/reviews`)}
+              className="flex items-center justify-between p-4 h-auto border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20"
+            >
+              <div className="flex items-center gap-2">
+                <Eye size={18} className="text-orange-600 dark:text-orange-400" />
+                <span className="text-orange-800 dark:text-orange-200 font-medium">
+                  Reviews ({stats.pendingReviews})
+                </span>
+              </div>
+              <ArrowRight size={16} className="text-orange-600 dark:text-orange-400" />
+            </Button>
+          )}
           <Button
             variant="secondary"
             onClick={() => navigate(`/workspace/${workspaceId}/documentation`)}
@@ -244,17 +216,11 @@ export default function ApiDesignDashboard() {
             </div>
             <ArrowRight size={16} />
           </Button>
-          <Button
-            variant="secondary"
-            onClick={() => navigate(`/workspace/${workspaceId}/collections`)}
-            className="flex items-center justify-between p-4 h-auto"
-          >
-            <div className="flex items-center gap-2">
-              <Plus size={18} />
-              <span>New Collection</span>
-            </div>
-            <ArrowRight size={16} />
-          </Button>
+        </div>
+        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+            More tools available in the sidebar →
+          </p>
         </div>
       </Card>
 
@@ -265,7 +231,7 @@ export default function ApiDesignDashboard() {
       >
         <div className="space-y-2">
           {stats.pendingReviews > 0 ? (
-            <div className="flex items-center gap-2 p-3 bg-orange-50 dark:bg-orange-900/20 rounded border-2 border-orange-300 dark:border-orange-700">
+            <div className="flex items-center gap-2 p-3 bg-orange-50 dark:bg-orange-900/20 rounded border border-orange-300 dark:border-orange-700">
               <AlertCircle size={16} className="text-orange-600 dark:text-orange-400" />
               <span className="text-sm text-orange-800 dark:text-orange-200">
                 {stats.pendingReviews} review{stats.pendingReviews !== 1 ? 's' : ''} pending your action

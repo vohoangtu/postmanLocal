@@ -3,98 +3,109 @@
  * Quản lý tasks trong team workspace
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useTaskStore, Task } from '../../stores/taskStore';
 import { useWorkspacePermission } from '../../hooks/useWorkspacePermission';
+import { useWorkspaceData } from '../../hooks/useWorkspaceData';
+import { useWorkspaceWebSocket } from '../../hooks/useWorkspaceWebSocket';
+import { useAsyncOperation } from '../../hooks/useAsyncOperation';
 import { useToast } from '../../hooks/useToast';
-import { websocketService } from '../../services/websocketService';
 import Button from '../UI/Button';
 import TaskCard from './TaskCard';
 import EmptyState from '../EmptyStates/EmptyState';
-import { CheckSquare, Plus, Filter, Loader2 } from 'lucide-react';
+import PageLayout from '../Layout/PageLayout';
+import PageToolbar from '../Layout/PageToolbar';
+import { CheckSquare, Plus, Filter } from 'lucide-react';
 import Select from '../UI/Select';
 import Modal from '../UI/Modal';
 import Input from '../UI/Input';
 import Textarea from '../UI/Textarea';
+import ErrorMessage from '../Error/ErrorMessage';
+import Skeleton from '../UI/Skeleton';
+import type { TaskFilters, CreateTaskFormData } from '../../types/workspace';
 
 export default function WorkspaceTasks() {
-  const { id } = useParams<{ id: string }>();
-  const { currentWorkspace, loadWorkspace } = useWorkspaceStore();
+  const { id: workspaceId } = useParams<{ id: string }>();
+  const { workspace, loading: workspaceLoading, error: workspaceError } = useWorkspaceData(workspaceId);
   const {
     tasks,
-    loading,
+    loading: tasksLoading,
     loadTasks,
     createTask,
     updateTask,
   } = useTaskStore();
-  const permissions = useWorkspacePermission(currentWorkspace);
+  const permissions = useWorkspacePermission(workspace);
   const toast = useToast();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [filters, setFilters] = useState({
-    status: '',
-    priority: '',
-    assigned_to: '',
+  const [filters, setFilters] = useState<TaskFilters>({
+    status: undefined,
+    priority: undefined,
+    assigned_to: undefined,
   });
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<CreateTaskFormData>({
     title: '',
     description: '',
     collection_id: '',
     request_id: '',
     assigned_to: '',
-    priority: 'medium' as Task['priority'],
+    priority: 'medium',
     due_date: '',
   });
 
+  // Load tasks
   useEffect(() => {
-    if (id) {
-      loadWorkspace(id);
-      loadTasks(id, filters);
+    if (workspaceId) {
+      loadTasks(workspaceId, filters);
     }
-  }, [id, loadWorkspace, loadTasks]);
+  }, [workspaceId, filters, loadTasks]);
 
   // Subscribe to real-time task updates
-  useEffect(() => {
-    if (!id) return;
+  useWorkspaceWebSocket(
+    workspaceId,
+    useMemo(
+      () => [
+        {
+          channel: `private-workspace.${workspaceId || ''}`,
+          event: 'task.created',
+          handler: () => {
+            if (workspaceId) {
+              loadTasks(workspaceId, filters);
+            }
+          },
+        },
+        {
+          channel: `private-workspace.${workspaceId || ''}`,
+          event: 'task.updated',
+          handler: () => {
+            if (workspaceId) {
+              loadTasks(workspaceId, filters);
+            }
+          },
+        },
+      ],
+      [workspaceId, filters, loadTasks]
+    )
+  );
 
-    const unsubscribe = websocketService.subscribe(
-      `private-workspace.${id}`,
-      'task.created',
-      () => {
-        loadTasks(id, filters);
+  const loading = workspaceLoading || tasksLoading;
+  const error = workspaceError;
+
+  // Create task operation
+  const {
+    loading: creating,
+    execute: executeCreateTask,
+  } = useAsyncOperation<Task>(
+    async () => {
+      if (!formData.title.trim() || !workspaceId) {
+        throw new Error('Tiêu đề task và workspace ID là bắt buộc');
       }
-    );
 
-    const unsubscribeUpdate = websocketService.subscribe(
-      `private-workspace.${id}`,
-      'task.updated',
-      () => {
-        loadTasks(id, filters);
-      }
-    );
-
-    return () => {
-      unsubscribe();
-      unsubscribeUpdate();
-    };
-  }, [id, filters, loadTasks]);
-
-  useEffect(() => {
-    if (id) {
-      loadTasks(id, filters);
-    }
-  }, [filters, id, loadTasks]);
-
-  const handleCreateTask = async () => {
-    if (!formData.title.trim() || !id) return;
-
-    try {
-      await createTask(id, formData);
-      toast.success('Task created successfully');
+      const newTask = await createTask(workspaceId, formData);
+      toast.success('Đã tạo task thành công');
       setShowCreateModal(false);
       setFormData({
         title: '',
@@ -105,10 +116,20 @@ export default function WorkspaceTasks() {
         priority: 'medium',
         due_date: '',
       });
-      loadTasks(id, filters);
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to create task');
+      if (workspaceId) {
+        await loadTasks(workspaceId, filters);
+      }
+      return newTask;
+    },
+    {
+      onError: (error) => {
+        toast.error(error.message || 'Không thể tạo task');
+      },
     }
+  );
+
+  const handleCreateTask = () => {
+    executeCreateTask();
   };
 
   const handleEditTask = (task: Task) => {
@@ -125,12 +146,18 @@ export default function WorkspaceTasks() {
     setShowCreateModal(true);
   };
 
-  const handleUpdateTask = async () => {
-    if (!editingTask || !formData.title.trim()) return;
+  // Update task operation
+  const {
+    loading: updating,
+    execute: executeUpdateTask,
+  } = useAsyncOperation(
+    async () => {
+      if (!editingTask || !formData.title.trim()) {
+        throw new Error('Task và tiêu đề là bắt buộc');
+      }
 
-    try {
       await updateTask(editingTask.id, formData);
-      toast.success('Task updated successfully');
+      toast.success('Đã cập nhật task thành công');
       setShowCreateModal(false);
       setEditingTask(null);
       setFormData({
@@ -142,38 +169,49 @@ export default function WorkspaceTasks() {
         priority: 'medium',
         due_date: '',
       });
-      loadTasks(id!, filters);
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to update task');
+      if (workspaceId) {
+        await loadTasks(workspaceId, filters);
+      }
+    },
+    {
+      onError: (error) => {
+        toast.error(error.message || 'Không thể cập nhật task');
+      },
     }
+  );
+
+  const handleUpdateTask = () => {
+    executeUpdateTask();
   };
 
-  if (!currentWorkspace || !currentWorkspace.is_team) {
+  if (!workspace || !workspace.is_team) {
     return (
       <div className="p-6">
         <div className="text-center text-gray-500 dark:text-gray-400">
-          This workspace is not a team workspace.
+          Workspace này không phải là team workspace.
         </div>
       </div>
     );
   }
 
-  const teamMembers = currentWorkspace.team_members || [];
-  const allMembers = [
-    { id: currentWorkspace.owner_id.toString(), name: currentWorkspace.owner?.name || 'Owner', email: currentWorkspace.owner?.email },
+  const teamMembers = workspace.team_members || [];
+  const allMembers = useMemo(() => [
+    { id: workspace.owner_id.toString(), name: workspace.owner?.name || 'Owner', email: workspace.owner?.email },
     ...teamMembers.map((m) => ({
       id: m.user_id.toString(),
       name: m.user?.name || 'User',
       email: m.user?.email,
     })),
-  ];
+  ], [workspace, teamMembers]);
 
-  const filteredTasks = tasks.filter((task) => {
-    if (filters.status && task.status !== filters.status) return false;
-    if (filters.priority && task.priority !== filters.priority) return false;
-    if (filters.assigned_to && task.assigned_to !== filters.assigned_to) return false;
-    return true;
-  });
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((task) => {
+      if (filters.status && task.status !== filters.status) return false;
+      if (filters.priority && task.priority !== filters.priority) return false;
+      if (filters.assigned_to && task.assigned_to !== filters.assigned_to) return false;
+      return true;
+    });
+  }, [tasks, filters]);
 
   const tasksByStatus = {
     todo: filteredTasks.filter((t) => t.status === 'todo'),
@@ -181,84 +219,115 @@ export default function WorkspaceTasks() {
     done: filteredTasks.filter((t) => t.status === 'done'),
   };
 
-  return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-            Tasks
-          </h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Manage and track team tasks
-          </p>
-        </div>
-        {permissions.canEdit && (
-          <Button
-            variant="primary"
-            onClick={() => {
-              setEditingTask(null);
-              setFormData({
-                title: '',
-                description: '',
-                collection_id: '',
-                request_id: '',
-                assigned_to: '',
-                priority: 'medium',
-                due_date: '',
-              });
-              setShowCreateModal(true);
-            }}
-            className="flex items-center gap-2"
-          >
-            <Plus size={16} />
-            New Task
-          </Button>
-        )}
-      </div>
+  const handleNewTaskClick = useCallback(() => {
+    setEditingTask(null);
+    setFormData({
+      title: '',
+      description: '',
+      collection_id: '',
+      request_id: '',
+      assigned_to: '',
+      priority: 'medium',
+      due_date: '',
+    });
+    setShowCreateModal(true);
+  }, []);
 
-      {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <Select
-          label="Status"
-          value={filters.status}
-          onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-          options={[
-            { value: '', label: 'All Status' },
-            { value: 'todo', label: 'Todo' },
-            { value: 'in_progress', label: 'In Progress' },
-            { value: 'done', label: 'Done' },
-            { value: 'cancelled', label: 'Cancelled' },
-          ]}
-        />
-        <Select
-          label="Priority"
-          value={filters.priority}
-          onChange={(e) => setFilters({ ...filters, priority: e.target.value })}
-          options={[
-            { value: '', label: 'All Priority' },
-            { value: 'low', label: 'Low' },
-            { value: 'medium', label: 'Medium' },
-            { value: 'high', label: 'High' },
-            { value: 'urgent', label: 'Urgent' },
-          ]}
-        />
-        <Select
-          label="Assigned To"
-          value={filters.assigned_to}
-          onChange={(e) => setFilters({ ...filters, assigned_to: e.target.value })}
-          options={[
-            { value: '', label: 'All Members' },
-            ...allMembers.map((m) => ({
-              value: m.id,
-              label: m.name,
-            })),
-          ]}
-        />
-      </div>
+  const renderToolbar = useCallback(() => {
+    return (
+      <PageToolbar
+        leftSection={
+          <>
+            <CheckSquare size={20} className="text-gray-600 dark:text-gray-400" />
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                Tasks
+              </h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''} • Manage and track team tasks
+              </p>
+            </div>
+          </>
+        }
+        rightSection={
+          permissions.canEdit && (
+            <Button
+              variant="primary"
+              onClick={handleNewTaskClick}
+              className="flex items-center gap-2"
+            >
+              <Plus size={16} />
+              New Task
+            </Button>
+          )
+        }
+      >
+        {/* Toolbar content */}
+      </PageToolbar>
+    );
+  }, [filteredTasks.length, permissions.canEdit, handleNewTaskClick]);
+
+  return (
+    <>
+      <PageLayout toolbar={renderToolbar()}>
+        {/* Filters */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <Select
+            label="Status"
+            value={filters.status}
+            onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+            options={[
+              { value: '', label: 'All Status' },
+              { value: 'todo', label: 'Todo' },
+              { value: 'in_progress', label: 'In Progress' },
+              { value: 'done', label: 'Done' },
+              { value: 'cancelled', label: 'Cancelled' },
+            ]}
+          />
+          <Select
+            label="Priority"
+            value={filters.priority}
+            onChange={(e) => setFilters({ ...filters, priority: e.target.value })}
+            options={[
+              { value: '', label: 'All Priority' },
+              { value: 'low', label: 'Low' },
+              { value: 'medium', label: 'Medium' },
+              { value: 'high', label: 'High' },
+              { value: 'urgent', label: 'Urgent' },
+            ]}
+          />
+          <Select
+            label="Assigned To"
+            value={filters.assigned_to}
+            onChange={(e) => setFilters({ ...filters, assigned_to: e.target.value })}
+            options={[
+              { value: '', label: 'All Members' },
+              ...allMembers.map((m) => ({
+                value: m.id,
+                label: m.name,
+              })),
+            ]}
+          />
+        </div>
+
+        {error && (
+          <div className="mb-4">
+            <ErrorMessage 
+              error={error} 
+              onRetry={() => {
+                if (workspaceId) {
+                  loadTasks(workspaceId, filters);
+                }
+              }}
+            />
+          </div>
+        )}
 
       {loading && tasks.length === 0 ? (
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="animate-spin text-blue-600" size={32} />
+        <div className="space-y-4">
+          <Skeleton variant="card" height={100} />
+          <Skeleton variant="card" height={100} />
+          <Skeleton variant="card" height={100} />
         </div>
       ) : filteredTasks.length === 0 ? (
         <EmptyState
@@ -313,6 +382,7 @@ export default function WorkspaceTasks() {
           </div>
         </div>
       )}
+      </PageLayout>
 
       {/* Create/Edit Task Modal */}
       <Modal
@@ -346,6 +416,7 @@ export default function WorkspaceTasks() {
             <Button
               variant="primary"
               onClick={editingTask ? handleUpdateTask : handleCreateTask}
+              disabled={creating || updating}
               disabled={!formData.title.trim()}
             >
               {editingTask ? 'Update' : 'Create'}
@@ -391,7 +462,7 @@ export default function WorkspaceTasks() {
                 type="date"
                 value={formData.due_date}
                 onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-                className="w-full px-3 py-2 border-2 border-gray-400 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                className="w-full px-3 py-2 border border-gray-400 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
               />
             </div>
           </div>

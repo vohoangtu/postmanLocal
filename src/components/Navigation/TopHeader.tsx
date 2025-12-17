@@ -26,23 +26,49 @@ export default function TopHeader({
   const { preferences, updatePreferences, setPreferencesLocal } = useUserPreferencesStore();
   const [isDark, setIsDark] = useState(false);
 
-  // Kiểm tra theme hiện tại
+  // Kiểm tra theme hiện tại và sync với preferences
   useEffect(() => {
     const checkTheme = () => {
       const root = document.documentElement;
-      setIsDark(root.classList.contains('dark'));
+      const isCurrentlyDark = root.classList.contains('dark');
+      setIsDark(isCurrentlyDark);
     };
     
+    // Kiểm tra theme ban đầu
     checkTheme();
     
-    // Listen for theme changes
+    // Listen cho changes từ DOM
     const observer = new MutationObserver(checkTheme);
     observer.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ['class']
     });
     
-    return () => observer.disconnect();
+    // Listen cho storage events (sync giữa các tabs)
+    const handleStorageChange = () => {
+      checkTheme();
+    };
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Sync với preferences store
+    if (preferences.theme) {
+      const root = document.documentElement;
+      const shouldBeDark = preferences.theme === 'dark' || 
+        (preferences.theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      
+      if (shouldBeDark && !root.classList.contains('dark')) {
+        root.classList.add('dark');
+        setIsDark(true);
+      } else if (!shouldBeDark && root.classList.contains('dark')) {
+        root.classList.remove('dark');
+        setIsDark(false);
+      }
+    }
+    
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, [preferences.theme]);
 
   // Toggle theme giữa light và dark
@@ -51,6 +77,9 @@ export default function TopHeader({
     
     // Cập nhật preferences trong store ngay lập tức (local) và apply theme
     setPreferencesLocal({ theme: newTheme });
+    
+    // Cập nhật state để UI phản ánh ngay
+    setIsDark(newTheme === 'dark');
     
     // Thử lưu vào backend nếu đã đăng nhập (không block UI)
     try {

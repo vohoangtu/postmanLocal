@@ -90,7 +90,7 @@ export default function WorkspacePresence({ compact = false }: WorkspacePresence
                 className="relative"
                 title={`${onlineUser.name || onlineUser.email || 'User'}${isActive ? ` - ${onlineUser.currentAction?.type}` : ''}`}
               >
-                <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-medium border-2 border-white dark:border-gray-800">
+                <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-medium border border-white dark:border-gray-800">
                   {onlineUser.name?.charAt(0).toUpperCase() || 'U'}
                 </div>
                 <Circle
@@ -113,7 +113,7 @@ export default function WorkspacePresence({ compact = false }: WorkspacePresence
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg border-2 border-gray-300 dark:border-gray-700 p-4 shadow-sm">
+    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700 p-4 shadow-sm">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Users size={18} className="text-gray-600 dark:text-gray-400" />

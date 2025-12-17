@@ -12,9 +12,11 @@ import { useToast } from '../../hooks/useToast';
 import Button from '../UI/Button';
 import Badge from '../UI/Badge';
 import Select from '../UI/Select';
-import { CheckCircle2, XCircle, AlertCircle, Clock, Filter, User, FileText } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertCircle, Clock, User, FileText } from 'lucide-react';
 import EmptyState from '../EmptyStates/EmptyState';
 import { useNavigate } from 'react-router-dom';
+import Skeleton from '../UI/Skeleton';
+import ErrorMessage from '../Error/ErrorMessage';
 
 export default function RequestReviewQueue() {
   const { id: workspaceId } = useParams<{ id: string }>();
@@ -32,15 +34,27 @@ export default function RequestReviewQueue() {
   } = useRequestReviewStore();
   const [filterStatus, setFilterStatus] = useState('');
   const [filterReviewer, setFilterReviewer] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
     if (workspaceId) {
-      loadWorkspaceReviews(workspaceId, {
+      loadReviewsWithErrorHandling();
+    }
+  }, [workspaceId, filterStatus, filterReviewer]);
+
+  const loadReviewsWithErrorHandling = async () => {
+    if (!workspaceId) return;
+    setError(null);
+    try {
+      await loadWorkspaceReviews(workspaceId, {
         status: filterStatus || undefined,
         reviewer_id: filterReviewer || undefined,
       });
+    } catch (err: any) {
+      setError(err.message || 'Failed to load reviews');
     }
-  }, [workspaceId, filterStatus, filterReviewer, loadWorkspaceReviews]);
+  };
 
   const pendingReviews = reviews.filter((r) => r.status === 'pending');
   const myPendingReviews = pendingReviews.filter((r) => r.reviewer_id === user?.id);
@@ -62,6 +76,7 @@ export default function RequestReviewQueue() {
     : [];
 
   const handleQuickAction = async (review: RequestReview, action: 'approve' | 'reject' | 'changes') => {
+    setActionLoading(review.id);
     try {
       if (action === 'approve') {
         await approveReview(review.id);
@@ -74,13 +89,12 @@ export default function RequestReviewQueue() {
         toast.success('Changes requested');
       }
       if (workspaceId) {
-        loadWorkspaceReviews(workspaceId, {
-          status: filterStatus || undefined,
-          reviewer_id: filterReviewer || undefined,
-        });
+        await loadReviewsWithErrorHandling();
       }
     } catch (error: any) {
       toast.error(error.message || 'Failed to update review');
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -170,9 +184,22 @@ export default function RequestReviewQueue() {
         />
       </div>
 
+      {error && (
+        <div className="mb-4">
+          <ErrorMessage 
+            error={error} 
+            onRetry={loadReviewsWithErrorHandling}
+          />
+        </div>
+      )}
+
       {loading && allReviews.length === 0 ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="text-gray-500">Loading reviews...</div>
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700 p-4">
+              <Skeleton variant="text" lines={3} />
+            </div>
+          ))}
         </div>
       ) : allReviews.length === 0 ? (
         <EmptyState
@@ -185,7 +212,7 @@ export default function RequestReviewQueue() {
           {allReviews.map((review) => (
             <div
               key={review.id}
-              className="p-4 bg-white dark:bg-gray-800 rounded-lg border-2 border-gray-300 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow"
+              className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow"
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1">
@@ -215,14 +242,16 @@ export default function RequestReviewQueue() {
                       size="sm"
                       onClick={() => handleQuickAction(review, 'approve')}
                       className="text-green-600 dark:text-green-400"
+                      disabled={actionLoading === review.id}
                     >
-                      Approve
+                      {actionLoading === review.id ? 'Processing...' : 'Approve'}
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => handleQuickAction(review, 'reject')}
                       className="text-red-600 dark:text-red-400"
+                      disabled={actionLoading === review.id}
                     >
                       Reject
                     </Button>
@@ -231,6 +260,7 @@ export default function RequestReviewQueue() {
                       size="sm"
                       onClick={() => handleQuickAction(review, 'changes')}
                       className="text-orange-600 dark:text-orange-400"
+                      disabled={actionLoading === review.id}
                     >
                       Request Changes
                     </Button>

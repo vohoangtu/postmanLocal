@@ -11,7 +11,7 @@ class Discussion extends BaseModel
     use HasFactory;
 
     protected $fillable = [
-        'workspace_id',
+        'collection_id',
         'title',
         'content',
         'created_by',
@@ -26,11 +26,11 @@ class Discussion extends BaseModel
     ];
 
     /**
-     * Get the workspace
+     * Get the collection
      */
-    public function workspace(): BelongsTo
+    public function collection(): BelongsTo
     {
-        return $this->belongsTo(Workspace::class);
+        return $this->belongsTo(Collection::class);
     }
 
     /**

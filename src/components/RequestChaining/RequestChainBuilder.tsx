@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useRequestChainStore, RequestChain } from "../../stores/requestChainStore";
 import { ChainStep, DataExtractor, Condition } from "../../services/requestChainService";
 import Button from "../UI/Button";
@@ -7,9 +7,11 @@ import Textarea from "../UI/Textarea";
 import Card from "../UI/Card";
 import Badge from "../UI/Badge";
 import { useToast } from "../../hooks/useToast";
-import { Plus, Trash2, GripVertical, Save, Edit, ArrowDown, Link2, Code } from "lucide-react";
+import { Plus, Trash2, Save, Edit, ArrowDown, Link2 } from "lucide-react";
 import StepEditor from "./StepEditor";
 import EmptyState from "../EmptyStates/EmptyState";
+import PageLayout from "../Layout/PageLayout";
+import PageToolbar from "../Layout/PageToolbar";
 
 interface RequestChainBuilderProps {
   chainId?: string;
@@ -70,7 +72,7 @@ export default function RequestChainBuilder({ chainId, onSave }: RequestChainBui
   };
 
 
-  const handleSave = () => {
+  const handleSave = useCallback(() => {
     if (!chainName.trim()) {
       toast.error("Please enter a chain name");
       return;
@@ -97,36 +99,52 @@ export default function RequestChainBuilder({ chainId, onSave }: RequestChainBui
 
     onSave?.(chain);
     toast.success("Chain saved successfully");
-  };
+  }, [chainName, chainDescription, steps, chainId, updateChain, addChain, onSave, toast]);
+
+  const renderToolbar = useCallback(() => {
+    return (
+      <PageToolbar
+        leftSection={
+          <>
+            <Link2 size={20} className="text-gray-600 dark:text-gray-400" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Request Chain Builder
+            </h3>
+          </>
+        }
+        rightSection={
+          <Button variant="primary" onClick={handleSave} className="flex items-center gap-1.5">
+            <Save size={14} />
+            Save Chain
+          </Button>
+        }
+      />
+    );
+  }, [handleSave]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 mb-4">
-        <Link2 size={20} className="text-gray-600 dark:text-gray-400" />
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-          Request Chain Builder
-        </h3>
-      </div>
-
-      <Card>
-        <div className="space-y-3">
-          <Input
-            label="Chain Name"
-            value={chainName}
-            onChange={(e) => setChainName(e.target.value)}
-            placeholder="e.g., User Authentication Flow"
-            fullWidth
-          />
-          <Textarea
-            label="Description (Optional)"
-            value={chainDescription}
-            onChange={(e) => setChainDescription(e.target.value)}
-            placeholder="Describe what this chain does..."
-            rows={2}
-            fullWidth
-          />
-        </div>
-      </Card>
+    <PageLayout toolbar={renderToolbar()}>
+      <div className="space-y-6">
+        {/* Chain Info Card */}
+        <Card>
+          <div className="space-y-3">
+            <Input
+              label="Chain Name"
+              value={chainName}
+              onChange={(e) => setChainName(e.target.value)}
+              placeholder="e.g., User Authentication Flow"
+              fullWidth
+            />
+            <Textarea
+              label="Description (Optional)"
+              value={chainDescription}
+              onChange={(e) => setChainDescription(e.target.value)}
+              placeholder="Describe what this chain does..."
+              rows={2}
+              fullWidth
+            />
+          </div>
+        </Card>
 
       {steps.length === 0 ? (
         <Card>
@@ -252,18 +270,15 @@ export default function RequestChainBuilder({ chainId, onSave }: RequestChainBui
         </div>
       )}
 
-      <div className="flex gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-        <Button variant="ghost" onClick={handleAddStep} className="flex items-center gap-1.5">
-          <Plus size={14} />
-          Add Step
-        </Button>
-        <div className="flex-1" />
-        <Button variant="primary" onClick={handleSave} className="flex items-center gap-1.5">
-          <Save size={14} />
-          Save Chain
-        </Button>
+        {/* Add Step Button */}
+        <div className="flex justify-center pt-2">
+          <Button variant="ghost" onClick={handleAddStep} className="flex items-center gap-1.5">
+            <Plus size={14} />
+            Add Step
+          </Button>
+        </div>
       </div>
-    </div>
+    </PageLayout>
   );
 }
 
